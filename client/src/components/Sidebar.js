@@ -8,7 +8,15 @@ const VIEWS = [
   { id: 'voicemail', icon: '📩', label: 'Voicemail' },
 ];
 
-export function Sidebar({ view, setView, unreadMessages, unreadVoicemails, deviceReady, socketConnected }) {
+export function Sidebar({
+  view,
+  setView,
+  unreadMessages,
+  unreadVoicemails,
+  deviceReady,
+  socketConnected,
+  onLogout,
+}) {
   return (
     <nav className="sidebar">
       {VIEWS.map((v) => (
@@ -32,6 +40,9 @@ export function Sidebar({ view, setView, unreadMessages, unreadVoicemails, devic
         className={`sidebar-status ${deviceReady && socketConnected ? 'connected' : 'disconnected'}`}
         title={deviceReady ? 'Phone ready' : 'Connecting...'}
       />
+      <button className="sidebar-btn" onClick={onLogout} title="Logout">
+        ⇦
+      </button>
     </nav>
   );
 }

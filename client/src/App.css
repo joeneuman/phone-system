@@ -43,6 +43,51 @@ body {
   overflow: hidden;
 }
 
+.auth-gate {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(circle at top, #1a2236, #0f1117 55%);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-card h1 {
+  font-size: 24px;
+  margin-bottom: 2px;
+}
+
+.auth-card p {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.phone-auth-pill {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 5;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
 /* ===== SIDEBAR ===== */
 .sidebar {
   width: var(--sidebar-width);

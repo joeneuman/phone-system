@@ -9,7 +9,7 @@ function getErrorMessage(err) {
   return 'Unknown Twilio error';
 }
 
-export function useTwilioDevice() {
+export function useTwilioDevice({ enabled = true } = {}) {
   const [device, setDevice] = useState(null);
   const [activeCall, setActiveCall] = useState(null);
   const [incomingCall, setIncomingCall] = useState(null);
@@ -20,6 +20,21 @@ export function useTwilioDevice() {
   const deviceRef = useRef(null);
 
   useEffect(() => {
+    if (!enabled) {
+      if (deviceRef.current) {
+        deviceRef.current.destroy();
+        deviceRef.current = null;
+      }
+      setDevice(null);
+      setActiveCall(null);
+      setIncomingCall(null);
+      setCallStatus('idle');
+      setIsMuted(false);
+      setDeviceReady(false);
+      setError(null);
+      return undefined;
+    }
+
     let mounted = true;
 
     async function init() {
@@ -86,7 +101,7 @@ export function useTwilioDevice() {
         deviceRef.current.destroy();
       }
     };
-  }, []);
+  }, [enabled]);
 
   const makeCall = useCallback(async (phoneNumber) => {
     if (!deviceRef.current) return;

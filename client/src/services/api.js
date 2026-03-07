@@ -1,4 +1,6 @@
 const API = process.env.REACT_APP_API_URL || '/api';
+const GIDDYDIGS_AUTH_API =
+  process.env.REACT_APP_GIDDYDIGS_AUTH_URL || 'https://staging.giddydigs.com/api/auth';
 
 async function request(path, options = {}) {
   const res = await fetch(`${API}${path}`, {
@@ -6,6 +8,25 @@ async function request(path, options = {}) {
     ...options,
   });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
+  const text = await res.text();
+  return text ? JSON.parse(text) : {};
+}
+
+async function authRequest(path, options = {}) {
+  const { token, headers, ...rest } = options;
+  const authHeaders = {
+    'Content-Type': 'application/json',
+    ...headers,
+  };
+  if (token) {
+    authHeaders.Authorization = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${GIDDYDIGS_AUTH_API}${path}`, {
+    headers: authHeaders,
+    ...rest,
+  });
+  if (!res.ok) throw new Error(`Auth error: ${res.status}`);
   const text = await res.text();
   return text ? JSON.parse(text) : {};
 }
@@ -48,4 +69,9 @@ export const api = {
   getUnlistenedCount: () => request('/voicemail/unread-count'),
   markVoicemailListened: (id) => request(`/voicemail/${id}/listened`, { method: 'POST' }),
   deleteVoicemail: (id) => request(`/voicemail/${id}`, { method: 'DELETE' }),
+
+  // GIDDY DIGS auth bridge (staging first, production via env switch)
+  authLogin: (username, password) =>
+    authRequest('/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  authMe: (token) => authRequest('/me', { method: 'GET', token }),
 };
