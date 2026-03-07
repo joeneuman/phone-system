@@ -1,0 +1,41 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            set -e
+            cd /opt/phone-system
+            git fetch origin
+            git reset --hard origin/main
+
+            cd /opt/phone-system/server
+            npm ci
+            npm run build
+            pm2 start dist/main.js --name phone-server || true
+            pm2 restart phone-server
+            pm2 save
+
+            cd /opt/phone-system/client
+            npm ci
+            npm run build
+
+            rm -rf /var/www/phone-system
+            mkdir -p /var/www/phone-system
+            cp -r /opt/phone-system/client/build/. /var/www/phone-system/
+
+            nginx -t
+            systemctl reload nginx
