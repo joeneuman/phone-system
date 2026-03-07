@@ -14,15 +14,16 @@ async function request(path, options = {}) {
 
 async function authRequest(path, options = {}) {
   const { token, headers, ...rest } = options;
-  const authHeaders = {
-    'Content-Type': 'application/json',
-    ...headers,
-  };
+  const authHeaders = { ...headers };
+  if (rest.body && !authHeaders['Content-Type']) {
+    authHeaders['Content-Type'] = 'application/json';
+  }
   if (token) {
     authHeaders.Authorization = `Bearer ${token}`;
   }
 
   const res = await fetch(`${GIDDYDIGS_AUTH_API}${path}`, {
+    credentials: 'include',
     headers: authHeaders,
     ...rest,
   });

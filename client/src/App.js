@@ -53,33 +53,40 @@ function App() {
 
   useEffect(() => {
     async function validateExistingSession() {
-      if (!authToken) {
-        setAuthStatus('unauthorized');
-        return;
-      }
-
       try {
-        const me = await api.authMe(authToken);
+        // First try shared session auth (staging/prod cookie flow).
+        const me = await api.authMe();
         if (!me?.isAdmin) {
           setLoginError('Access denied: admin privileges required.');
-          localStorage.removeItem(PHONE_AUTH_TOKEN_KEY);
-          localStorage.removeItem(PHONE_AUTH_USER_KEY);
-          setAuthToken('');
-          setAuthUser(null);
-          setAuthStatus('unauthorized');
-          return;
+          throw new Error('Not an admin');
         }
 
         setAuthUser(me);
         localStorage.setItem(PHONE_AUTH_USER_KEY, JSON.stringify(me));
         setAuthStatus('ready');
       } catch (e) {
-        setLoginError('Session expired. Please sign in again.');
-        localStorage.removeItem(PHONE_AUTH_TOKEN_KEY);
-        localStorage.removeItem(PHONE_AUTH_USER_KEY);
-        setAuthToken('');
-        setAuthUser(null);
-        setAuthStatus('unauthorized');
+        // Fallback to local token flow (manual login inside phone app).
+        if (!authToken) {
+          setAuthStatus('unauthorized');
+          return;
+        }
+        try {
+          const me = await api.authMe(authToken);
+          if (!me?.isAdmin) {
+            setLoginError('Access denied: admin privileges required.');
+            throw new Error('Not an admin');
+          }
+          setAuthUser(me);
+          localStorage.setItem(PHONE_AUTH_USER_KEY, JSON.stringify(me));
+          setAuthStatus('ready');
+        } catch {
+          setLoginError('Session expired. Please sign in again.');
+          localStorage.removeItem(PHONE_AUTH_TOKEN_KEY);
+          localStorage.removeItem(PHONE_AUTH_USER_KEY);
+          setAuthToken('');
+          setAuthUser(null);
+          setAuthStatus('unauthorized');
+        }
       }
     }
 
