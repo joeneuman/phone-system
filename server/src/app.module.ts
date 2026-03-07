@@ -7,6 +7,7 @@ import { MessagesModule } from './messages/messages.module';
 import { CallsModule } from './calls/calls.module';
 import { VoicemailModule } from './voicemail/voicemail.module';
 import { PhoneGateway } from './phone.gateway';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { PhoneGateway } from './phone.gateway';
     CallsModule,
     VoicemailModule,
   ],
+  controllers: [HealthController],
   providers: [PhoneGateway],
 })
 export class AppModule {}
