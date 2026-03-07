@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 
-const WS_URL = process.env.REACT_APP_WS_URL || 'http://localhost:3200/phone';
+const WS_URL = process.env.REACT_APP_WS_URL || '/phone';
 
 export function useSocket() {
   const socketRef = useRef(null);
