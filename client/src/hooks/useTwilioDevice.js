@@ -2,6 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Device } from '@twilio/voice-sdk';
 import { api } from '../services/api';
 
+function getErrorMessage(err) {
+  if (!err) return 'Unknown Twilio error';
+  if (typeof err === 'string') return err;
+  if (typeof err.message === 'string' && err.message.length > 0) return err.message;
+  return 'Unknown Twilio error';
+}
+
 export function useTwilioDevice() {
   const [device, setDevice] = useState(null);
   const [activeCall, setActiveCall] = useState(null);
@@ -30,7 +37,7 @@ export function useTwilioDevice() {
 
         newDevice.on('error', (err) => {
           console.error('Twilio Device error:', err);
-          if (mounted) setError(err.message);
+          if (mounted) setError(getErrorMessage(err));
         });
 
         newDevice.on('incoming', (call) => {
@@ -67,7 +74,7 @@ export function useTwilioDevice() {
         if (mounted) setDevice(newDevice);
       } catch (err) {
         console.error('Failed to initialize Twilio Device:', err);
-        if (mounted) setError(err.message);
+        if (mounted) setError(getErrorMessage(err));
       }
     }
 
@@ -103,11 +110,11 @@ export function useTwilioDevice() {
         setIsMuted(false);
       });
       call.on('error', (err) => {
-        setError(err.message);
+        setError(getErrorMessage(err));
         setCallStatus('idle');
       });
     } catch (err) {
-      setError(err.message);
+      setError(getErrorMessage(err));
       setCallStatus('idle');
     }
   }, []);
