@@ -55,7 +55,8 @@ function App() {
     async function validateExistingSession() {
       try {
         // First try shared session auth (staging/prod cookie flow).
-        const me = await api.authMe();
+        const res = await api.authMe();
+        const me = res?.user || res;
         if (!me?.isAdmin) {
           setLoginError('Access denied: admin privileges required.');
           throw new Error('Not an admin');
@@ -71,7 +72,8 @@ function App() {
           return;
         }
         try {
-          const me = await api.authMe(authToken);
+          const res = await api.authMe(authToken);
+          const me = res?.user || res;
           if (!me?.isAdmin) {
             setLoginError('Access denied: admin privileges required.');
             throw new Error('Not an admin');
@@ -175,7 +177,8 @@ function App() {
         throw new Error('No auth token returned from GIDDY DIGS.');
       }
 
-      const me = await api.authMe(token);
+      const meRes = await api.authMe(token);
+      const me = meRes?.user || meRes;
       if (!me?.isAdmin) {
         throw new Error('Access denied: admin privileges required.');
       }

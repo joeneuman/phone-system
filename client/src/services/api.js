@@ -1,6 +1,6 @@
 const API = process.env.REACT_APP_API_URL || '/api';
 const GIDDYDIGS_AUTH_API =
-  process.env.REACT_APP_GIDDYDIGS_AUTH_URL || 'https://staging.giddydigs.com/_api/auth';
+  process.env.REACT_APP_GIDDYDIGS_AUTH_URL || 'https://giddydigs.com/_api/auth';
 
 async function request(path, options = {}) {
   const res = await fetch(`${API}${path}`, {
