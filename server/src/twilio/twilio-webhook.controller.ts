@@ -6,6 +6,7 @@ import { MessagesService } from '../messages/messages.service';
 import { VoicemailService } from '../voicemail/voicemail.service';
 import { ContactsService } from '../contacts/contacts.service';
 import { SettingsService } from '../settings/settings.service';
+import { ConfigService } from '@nestjs/config';
 const Twilio = require('twilio');
 const VoiceResponse = Twilio.twiml.VoiceResponse;
 const MessagingResponse = Twilio.twiml.MessagingResponse;
@@ -19,6 +20,7 @@ export class TwilioWebhookController {
     private voicemailService: VoicemailService,
     private contactsService: ContactsService,
     private settingsService: SettingsService,
+    private config: ConfigService,
   ) {}
 
   /**
@@ -51,7 +53,7 @@ export class TwilioWebhookController {
 
   /**
    * Handles incoming calls to the Twilio phone number.
-   * Rings the browser client; if no answer, goes to voicemail.
+   * Routes to AI attendant if configured, otherwise rings browser/forwards.
    */
   @Post('voice/incoming')
   async handleIncomingVoice(@Body() body: any, @Res() res: Response) {
@@ -68,25 +70,41 @@ export class TwilioWebhookController {
       status: 'ringing',
     });
 
-    const forwarding = await this.settingsService.get('callForwarding');
+    const hasAiKey = !!this.config.get<string>('ANTHROPIC_API_KEY');
 
-    if (forwarding?.enabled && forwarding?.number) {
-      // Forward to personal cell
-      const dial = twiml.dial({
-        callerId: from,
-        timeout: 25,
-        action: `${publicUrl}/api/webhooks/twilio/voice/complete`,
-        method: 'POST',
+    if (hasAiKey) {
+      // Route to AI attendant via ConversationRelay
+      const connect = twiml.connect();
+      const wsUrl = publicUrl.replace(/^https?:\/\//, 'wss://') + '/ws/conversation-relay';
+      connect.conversationRelay({
+        url: wsUrl,
+        ttsProvider: 'elevenlabs',
+        voice: this.config.get<string>('ELEVENLABS_VOICE_ID') || 'Sarah',
+        transcriptionProvider: 'deepgram',
+        language: 'en-US',
+        interruptible: 'true',
+        welcomeGreeting: "Giddy Digs! This is Lucy, how can I help you?",
       });
-      dial.number(forwarding.number);
     } else {
-      // Ring the browser client
-      const dial = twiml.dial({
-        timeout: 25,
-        action: `${publicUrl}/api/webhooks/twilio/voice/complete`,
-        method: 'POST',
-      });
-      dial.client('giddy-phone-user');
+      // Fallback: no AI key — use direct routing
+      const forwarding = await this.settingsService.get('callForwarding');
+
+      if (forwarding?.enabled && forwarding?.number) {
+        const dial = twiml.dial({
+          callerId: from,
+          timeout: 25,
+          action: `${publicUrl}/api/webhooks/twilio/voice/complete`,
+          method: 'POST',
+        });
+        dial.number(forwarding.number);
+      } else {
+        const dial = twiml.dial({
+          timeout: 25,
+          action: `${publicUrl}/api/webhooks/twilio/voice/complete`,
+          method: 'POST',
+        });
+        dial.client('giddy-phone-user');
+      }
     }
 
     res.type('text/xml');

@@ -7,6 +7,7 @@ import { MessagesModule } from './messages/messages.module';
 import { CallsModule } from './calls/calls.module';
 import { VoicemailModule } from './voicemail/voicemail.module';
 import { SettingsModule } from './settings/settings.module';
+import { AiVoiceModule } from './ai-voice/ai-voice.module';
 import { PhoneGateway } from './phone.gateway';
 import { HealthController } from './health.controller';
 
@@ -20,6 +21,7 @@ import { HealthController } from './health.controller';
     CallsModule,
     VoicemailModule,
     SettingsModule,
+    AiVoiceModule,
   ],
   controllers: [HealthController],
   providers: [PhoneGateway],
