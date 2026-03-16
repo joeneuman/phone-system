@@ -16,6 +16,9 @@ export function Sidebar({
   deviceReady,
   socketConnected,
   onLogout,
+  forwardingEnabled,
+  forwardingLoading,
+  onToggleForwarding,
 }) {
   return (
     <nav className="sidebar">
@@ -36,6 +39,15 @@ export function Sidebar({
         </button>
       ))}
       <div className="sidebar-spacer" />
+      <button
+        className={`sidebar-btn forwarding-toggle ${forwardingEnabled ? 'forwarding-on' : ''}`}
+        onClick={onToggleForwarding}
+        disabled={forwardingLoading}
+        title={forwardingEnabled ? 'Forwarding ON - tap to disable' : 'Forwarding OFF - tap to enable'}
+      >
+        <span className="forwarding-icon">{forwardingEnabled ? '↗' : '↗'}</span>
+        <span className={`forwarding-dot ${forwardingEnabled ? 'on' : 'off'}`} />
+      </button>
       <div
         className={`sidebar-status ${deviceReady && socketConnected ? 'connected' : 'disconnected'}`}
         title={deviceReady ? 'Phone ready' : 'Connecting...'}

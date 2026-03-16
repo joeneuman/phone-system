@@ -71,6 +71,14 @@ export const api = {
   markVoicemailListened: (id) => request(`/voicemail/${id}/listened`, { method: 'POST' }),
   deleteVoicemail: (id) => request(`/voicemail/${id}`, { method: 'DELETE' }),
 
+  // Settings
+  getForwarding: () => request('/settings/forwarding'),
+  setForwarding: (enabled, number) =>
+    request('/settings/forwarding', {
+      method: 'PUT',
+      body: JSON.stringify({ enabled, number }),
+    }),
+
   // GIDDY DIGS auth bridge (staging first, production via env switch)
   authLogin: (username, password) =>
     authRequest('/login', { method: 'POST', body: JSON.stringify({ username, password }) }),

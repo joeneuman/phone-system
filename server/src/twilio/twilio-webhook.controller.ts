@@ -5,6 +5,7 @@ import { CallsService } from '../calls/calls.service';
 import { MessagesService } from '../messages/messages.service';
 import { VoicemailService } from '../voicemail/voicemail.service';
 import { ContactsService } from '../contacts/contacts.service';
+import { SettingsService } from '../settings/settings.service';
 const Twilio = require('twilio');
 const VoiceResponse = Twilio.twiml.VoiceResponse;
 const MessagingResponse = Twilio.twiml.MessagingResponse;
@@ -17,6 +18,7 @@ export class TwilioWebhookController {
     private messagesService: MessagesService,
     private voicemailService: VoicemailService,
     private contactsService: ContactsService,
+    private settingsService: SettingsService,
   ) {}
 
   /**
@@ -66,13 +68,26 @@ export class TwilioWebhookController {
       status: 'ringing',
     });
 
-    const dial = twiml.dial({
-      timeout: 25,
-      action: `${publicUrl}/api/webhooks/twilio/voice/complete`,
-      method: 'POST',
-    });
+    const forwarding = await this.settingsService.get('callForwarding');
 
-    dial.client('giddy-phone-user');
+    if (forwarding?.enabled && forwarding?.number) {
+      // Forward to personal cell
+      const dial = twiml.dial({
+        callerId: from,
+        timeout: 25,
+        action: `${publicUrl}/api/webhooks/twilio/voice/complete`,
+        method: 'POST',
+      });
+      dial.number(forwarding.number);
+    } else {
+      // Ring the browser client
+      const dial = twiml.dial({
+        timeout: 25,
+        action: `${publicUrl}/api/webhooks/twilio/voice/complete`,
+        method: 'POST',
+      });
+      dial.client('giddy-phone-user');
+    }
 
     res.type('text/xml');
     res.send(twiml.toString());
@@ -142,6 +157,17 @@ export class TwilioWebhookController {
       mediaUrls,
       twilioSid: body.MessageSid,
     });
+
+    // Forward SMS to personal cell if forwarding is enabled
+    const forwarding = await this.settingsService.get('callForwarding');
+    if (forwarding?.enabled && forwarding?.number) {
+      const forwardBody = `[Fwd from ${from}] ${msgBody}`;
+      try {
+        await this.twilioService.sendSms(forwarding.number, forwardBody, mediaUrls.length ? mediaUrls : undefined);
+      } catch (e) {
+        console.error('Failed to forward SMS:', e);
+      }
+    }
 
     const twiml = new MessagingResponse();
     res.type('text/xml');

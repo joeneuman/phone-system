@@ -158,6 +158,39 @@ body {
 .sidebar-status.connected { background: var(--green); }
 .sidebar-status.disconnected { background: var(--red); }
 
+/* ===== FORWARDING TOGGLE ===== */
+.forwarding-toggle {
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.forwarding-toggle .forwarding-icon {
+  font-size: 20px;
+  transition: color var(--transition);
+}
+
+.forwarding-toggle.forwarding-on {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.forwarding-toggle.forwarding-on:hover {
+  background: var(--green-dim);
+}
+
+.forwarding-dot {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transition: background var(--transition);
+}
+
+.forwarding-dot.on { background: var(--green); }
+.forwarding-dot.off { background: var(--text-muted); }
+
 /* ===== MAIN CONTENT ===== */
 .main-content {
   flex: 1;

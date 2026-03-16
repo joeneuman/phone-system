@@ -50,6 +50,8 @@ function App() {
   const [voicemails, setVoicemails] = useState([]);
   const [unreadVm, setUnreadVm] = useState(0);
   const [totalUnread, setTotalUnread] = useState(0);
+  const [forwardingEnabled, setForwardingEnabled] = useState(false);
+  const [forwardingLoading, setForwardingLoading] = useState(false);
 
   useEffect(() => {
     async function validateExistingSession() {
@@ -128,13 +130,31 @@ function App() {
     } catch (e) { console.error('Failed to load voicemails', e); }
   }, []);
 
+  const loadForwarding = useCallback(async () => {
+    try {
+      const data = await api.getForwarding();
+      setForwardingEnabled(data.enabled || false);
+    } catch (e) { console.error('Failed to load forwarding setting', e); }
+  }, []);
+
+  const toggleForwarding = useCallback(async () => {
+    setForwardingLoading(true);
+    try {
+      const newState = !forwardingEnabled;
+      await api.setForwarding(newState, '+14357671597');
+      setForwardingEnabled(newState);
+    } catch (e) { console.error('Failed to toggle forwarding', e); }
+    setForwardingLoading(false);
+  }, [forwardingEnabled]);
+
   useEffect(() => {
     if (!isReady) return;
     loadConversations();
     loadContacts();
     loadCallHistory();
     loadVoicemails();
-  }, [isReady, loadConversations, loadContacts, loadCallHistory, loadVoicemails]);
+    loadForwarding();
+  }, [isReady, loadConversations, loadContacts, loadCallHistory, loadVoicemails, loadForwarding]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -254,6 +274,9 @@ function App() {
         deviceReady={phone.deviceReady}
         socketConnected={socket.connected}
         onLogout={handleLogout}
+        forwardingEnabled={forwardingEnabled}
+        forwardingLoading={forwardingLoading}
+        onToggleForwarding={toggleForwarding}
       />
 
       <main className="main-content">
