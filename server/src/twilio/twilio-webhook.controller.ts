@@ -83,7 +83,7 @@ export class TwilioWebhookController {
         transcriptionProvider: 'deepgram',
         language: 'en-US',
         interruptible: 'true',
-        welcomeGreeting: "Giddy Digs! This is Lucy, how can I help you?",
+        welcomeGreeting: "Giddy Diiiggs! ... This is Lucy, how can I help you?",
       });
     } else {
       // Fallback: no AI key — use direct routing
