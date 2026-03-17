@@ -78,12 +78,12 @@ export class TwilioWebhookController {
       const wsUrl = publicUrl.replace(/^https?:\/\//, 'wss://') + '/ws/conversation-relay';
       connect.conversationRelay({
         url: wsUrl,
-        ttsProvider: 'Google',
-        voice: 'en-US-Journey-O',
+        ttsProvider: 'ElevenLabs',
+        voice: '56AoDkrOh6qfVPDXZ7Pt',
+        elevenlabsTextNormalization: 'on',
         transcriptionProvider: 'deepgram',
         language: 'en-US',
         interruptible: 'true',
-        speechRate: '0.9',
         welcomeGreeting: "Giddy DIGS! ... This is Lucy, how can I help you?",
       });
     } else {
