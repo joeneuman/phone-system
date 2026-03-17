@@ -8,6 +8,7 @@ import { CallsModule } from './calls/calls.module';
 import { VoicemailModule } from './voicemail/voicemail.module';
 import { SettingsModule } from './settings/settings.module';
 import { AiVoiceModule } from './ai-voice/ai-voice.module';
+import { ListingsModule } from './listings/listings.module';
 import { PhoneGateway } from './phone.gateway';
 import { HealthController } from './health.controller';
 
@@ -15,6 +16,10 @@ import { HealthController } from './health.controller';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     MongooseModule.forRoot(process.env.MONGODB_URI || 'mongodb://localhost:27017/giddy-phone'),
+    MongooseModule.forRoot(
+      process.env.LISTINGS_MONGODB_URI || 'mongodb://localhost:27017/giddydigs_listings',
+      { connectionName: 'listings' },
+    ),
     TwilioModule,
     ContactsModule,
     MessagesModule,
@@ -22,6 +27,7 @@ import { HealthController } from './health.controller';
     VoicemailModule,
     SettingsModule,
     AiVoiceModule,
+    ListingsModule,
   ],
   controllers: [HealthController],
   providers: [PhoneGateway],

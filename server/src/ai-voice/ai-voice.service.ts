@@ -4,6 +4,7 @@ import { TwilioService } from '../twilio/twilio.service';
 import { SettingsService } from '../settings/settings.service';
 import { CallsService } from '../calls/calls.service';
 import { ContactsService } from '../contacts/contacts.service';
+import { ListingsService } from '../listings/listings.service';
 import Anthropic from '@anthropic-ai/sdk';
 
 const FILLER_PHRASES = [
@@ -43,7 +44,9 @@ LOOPING (Active Listening):
 
 CAPABILITIES:
 - You can answer general questions about Giddy Digs and real estate.
-- You do NOT have access to MLS listings, property data, or inventory. If someone asks about specific listings, availability, or property details, let them know you don't have that info handy but you'd love to connect them with Joe who can help.
+- You CAN search property listings! Use the search_listings tool when a caller asks about available properties, homes for sale, what's on the market, etc.
+- When presenting listing results, share them conversationally across multiple turns — mention one or two highlights at a time, not all at once. Use natural phrasing for prices and details.
+- If the caller wants more detail than you have, or wants to schedule a showing, offer to connect them with Joe.
 - If the caller wants to speak with Joe (the agent/owner), use the transfer_call tool to connect them.
 - If the caller asks something you cannot answer or if they seem frustrated or insistent on talking to a person, transfer the call.
 - Be warm, helpful, and professional.
@@ -56,7 +59,7 @@ interface CallSession {
   callSid: string;
   streamSid: string;
   from: string;
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  messages: Array<{ role: 'user' | 'assistant'; content: any }>;
   abortController: AbortController | null;
   isPlaying: boolean;
 }
@@ -72,6 +75,7 @@ export class AiVoiceService implements OnModuleInit {
     private settingsService: SettingsService,
     private callsService: CallsService,
     private contactsService: ContactsService,
+    private listingsService: ListingsService,
   ) {}
 
   onModuleInit() {
@@ -141,6 +145,45 @@ export class AiVoiceService implements OnModuleInit {
           required: ['reason'],
         },
       },
+      {
+        name: 'search_listings',
+        description:
+          'Search available property listings. Use when the caller asks about homes for sale, available properties, or what is on the market. Extract search criteria from the conversation.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            city: {
+              type: 'string',
+              description: 'City to search in (e.g. "St George", "Washington", "Hurricane")',
+            },
+            minPrice: {
+              type: 'number',
+              description: 'Minimum price filter',
+            },
+            maxPrice: {
+              type: 'number',
+              description: 'Maximum price filter',
+            },
+            minBeds: {
+              type: 'number',
+              description: 'Minimum number of bedrooms',
+            },
+            minBaths: {
+              type: 'number',
+              description: 'Minimum number of bathrooms',
+            },
+            status: {
+              type: 'string',
+              description: 'Listing status — defaults to Active',
+            },
+            propertyType: {
+              type: 'string',
+              description: 'Property type (e.g. "Residential", "Condo", "Townhouse", "Land")',
+            },
+          },
+          required: [],
+        },
+      },
     ];
   }
 
@@ -159,86 +202,9 @@ export class AiVoiceService implements OnModuleInit {
     session.abortController = abortController;
 
     try {
-      const stream = this.anthropic.messages.stream(
-        {
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 200,
-          system: SYSTEM_PROMPT,
-          messages: session.messages,
-          tools: this.getTools(),
-        },
-        { signal: abortController.signal },
-      );
-
-      let fullResponse = '';
-      let ttsBuffer = '';
-      let transferRequested = false;
-      let transferReason = '';
-
-      for await (const event of stream) {
-        if (abortController.signal.aborted) break;
-
-        if (
-          event.type === 'content_block_delta' &&
-          event.delta.type === 'text_delta'
-        ) {
-          const text = event.delta.text;
-          fullResponse += text;
-          ttsBuffer += text;
-
-          // Send to TTS in sentence-sized chunks for streaming
-          const sentenceEnd = ttsBuffer.match(/[.!?,:;]\s/);
-          if (sentenceEnd || ttsBuffer.length > 80) {
-            yield { type: 'text', token: ttsBuffer, last: false };
-            ttsBuffer = '';
-          }
-        }
-
-        if (
-          event.type === 'content_block_delta' &&
-          event.delta.type === 'input_json_delta'
-        ) {
-          // Tool input streaming — accumulate but don't act yet
-        }
-
-        if (event.type === 'content_block_stop') {
-          // Check if this was a tool use block
-        }
-
-        if (event.type === 'message_delta') {
-          if (event.delta.stop_reason === 'tool_use') {
-            transferRequested = true;
-          }
-        }
-      }
-
-      // Flush remaining text
-      if (ttsBuffer.trim()) {
-        yield { type: 'text', token: ttsBuffer, last: false };
-      }
-
-      // Signal end of response
-      yield { type: 'text', token: '', last: true };
-
-      // Save assistant response to history
-      if (fullResponse) {
-        session.messages.push({ role: 'assistant', content: fullResponse });
-      }
-
-      // Handle transfer after response is spoken
-      if (transferRequested) {
-        // Extract reason from the tool use block
-        const finalMessage = await stream.finalMessage();
-        for (const block of finalMessage.content) {
-          if (block.type === 'tool_use' && block.name === 'transfer_call') {
-            transferReason = (block.input as any)?.reason || 'Caller requested transfer';
-          }
-        }
-        yield { type: 'transfer', reason: transferReason };
-      }
+      yield* this.runClaudeStream(session, abortController);
     } catch (err: any) {
       if (err.name === 'AbortError' || abortController.signal.aborted) {
-        // Interrupted — this is normal during barge-in
         return;
       }
       console.error('Claude API error:', err);
@@ -251,6 +217,124 @@ export class AiVoiceService implements OnModuleInit {
       yield { type: 'transfer', reason: 'AI error — fallback transfer' };
     } finally {
       session.abortController = null;
+    }
+  }
+
+  private async *runClaudeStream(
+    session: CallSession,
+    abortController: AbortController,
+  ): AsyncGenerator<
+    { type: 'text'; token: string; last: boolean } | { type: 'transfer'; reason: string }
+  > {
+    const stream = this.anthropic.messages.stream(
+      {
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        system: SYSTEM_PROMPT,
+        messages: session.messages,
+        tools: this.getTools(),
+      },
+      { signal: abortController.signal },
+    );
+
+    let fullResponse = '';
+    let ttsBuffer = '';
+
+    for await (const event of stream) {
+      if (abortController.signal.aborted) break;
+
+      if (
+        event.type === 'content_block_delta' &&
+        event.delta.type === 'text_delta'
+      ) {
+        const text = event.delta.text;
+        fullResponse += text;
+        ttsBuffer += text;
+
+        const sentenceEnd = ttsBuffer.match(/[.!?,:;]\s/);
+        if (sentenceEnd || ttsBuffer.length > 80) {
+          yield { type: 'text', token: ttsBuffer, last: false };
+          ttsBuffer = '';
+        }
+      }
+    }
+
+    // Flush remaining text
+    if (ttsBuffer.trim()) {
+      yield { type: 'text', token: ttsBuffer, last: false };
+    }
+
+    const finalMessage = await stream.finalMessage();
+
+    // Check if the response contains tool use
+    if (finalMessage.stop_reason === 'tool_use') {
+      // Save the assistant message (with tool_use blocks) to history
+      session.messages.push({ role: 'assistant', content: finalMessage.content });
+
+      // Process each tool use block
+      const toolResults: Array<{
+        type: 'tool_result';
+        tool_use_id: string;
+        content: string;
+      }> = [];
+
+      let transferRequested = false;
+      let transferReason = '';
+
+      for (const block of finalMessage.content) {
+        if (block.type !== 'tool_use') continue;
+
+        if (block.name === 'transfer_call') {
+          transferReason = (block.input as any)?.reason || 'Caller requested transfer';
+          transferRequested = true;
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: block.id,
+            content: 'Transfer initiated.',
+          });
+        } else if (block.name === 'search_listings') {
+          const params = block.input as any;
+          console.log(`Searching listings:`, params);
+          try {
+            const results = await this.listingsService.searchProperties(params);
+            const formatted = this.listingsService.formatForConversation(results, params);
+            console.log(`Found ${results.length} listings`);
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: formatted,
+            });
+          } catch (err) {
+            console.error('Listings search error:', err);
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: 'Sorry, the listing search is temporarily unavailable. Offer to connect the caller with Joe instead.',
+            });
+          }
+        }
+      }
+
+      // Add tool results to the conversation
+      session.messages.push({ role: 'user', content: toolResults });
+
+      // If transfer was requested, signal it after yielding the text spoken so far
+      if (transferRequested) {
+        yield { type: 'text', token: '', last: true };
+        yield { type: 'transfer', reason: transferReason };
+        return;
+      }
+
+      // For search_listings: stream a follow-up response from Claude with the results
+      yield* this.runClaudeStream(session, abortController);
+      return;
+    }
+
+    // No tool use — normal text response
+    yield { type: 'text', token: '', last: true };
+
+    if (fullResponse) {
+      session.messages.push({ role: 'assistant', content: fullResponse });
     }
   }
 
