@@ -1,10 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import {
-  NormalizedProperty,
-  NormalizedPropertyDocument,
-} from './normalized-property.schema';
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 export interface ListingSearchParams {
   city?: string;
@@ -32,64 +27,88 @@ export interface ListingResult {
 
 @Injectable()
 export class ListingsService {
-  constructor(
-    @InjectModel(NormalizedProperty.name, 'listings')
-    private propertyModel: Model<NormalizedPropertyDocument>,
-  ) {}
+  private readonly logger = new Logger(ListingsService.name);
+  private readonly apiUrl: string;
+
+  constructor(private config: ConfigService) {
+    this.apiUrl =
+      this.config.get<string>('GIDDYDIGS_API_URL') || 'https://giddydigs.com';
+  }
 
   async searchProperties(
     params: ListingSearchParams,
   ): Promise<ListingResult[]> {
-    const filter: Record<string, any> = {};
-
-    // Default to Active listings
-    filter['StandardFields.StandardStatus'] = params.status || 'Active';
+    const searchData: Record<string, any> = {};
 
     if (params.city) {
-      filter['StandardFields.City'] = {
-        $regex: new RegExp(`^${params.city}$`, 'i'),
-      };
+      searchData.city = params.city;
+    }
+    if (params.minPrice != null) {
+      searchData.minPrice = params.minPrice;
+    }
+    if (params.maxPrice != null) {
+      searchData.maxPrice = params.maxPrice;
+    }
+    if (params.minBeds != null) {
+      searchData.minBedrooms = params.minBeds;
+    }
+    if (params.minBaths != null) {
+      searchData.minBathrooms = params.minBaths;
     }
 
-    if (params.minPrice || params.maxPrice) {
-      filter['StandardFields.CurrentPrice'] = {};
-      if (params.minPrice) {
-        filter['StandardFields.CurrentPrice'].$gte = params.minPrice;
-      }
-      if (params.maxPrice) {
-        filter['StandardFields.CurrentPrice'].$lte = params.maxPrice;
-      }
-    }
-
-    if (params.minBeds) {
-      filter['StandardFields.BedsTotal'] = { $gte: params.minBeds };
-    }
-
-    if (params.minBaths) {
-      filter['StandardFields.BathsTotal'] = { $gte: params.minBaths };
-    }
-
+    // Map property type to boolean flags
     if (params.propertyType) {
-      filter['StandardFields.PropertyType'] = {
-        $regex: new RegExp(params.propertyType, 'i'),
-      };
+      const pt = params.propertyType.toLowerCase();
+      if (pt.includes('residential') || pt.includes('house') || pt.includes('single')) {
+        searchData.isResidential = true;
+      }
+      if (pt.includes('commercial')) {
+        searchData.isCommercial = true;
+      }
+      if (pt.includes('condo')) {
+        searchData.isCondo = true;
+      }
+      if (pt.includes('townhouse') || pt.includes('townhome')) {
+        searchData.isTownhouse = true;
+      }
+      if (pt.includes('land') || pt.includes('lot')) {
+        searchData.isLand = true;
+      }
     }
 
-    const docs = await this.propertyModel
-      .find(filter)
-      .sort({ 'StandardFields.CurrentPrice': 1 })
-      .limit(5)
-      .lean()
-      .exec();
+    const requestBody = {
+      searchData,
+      page: 1,
+      pageLimit: 5,
+    };
 
-    return docs.map((doc) => {
-      const sf = doc.StandardFields || {};
-      const streetParts = [sf.StreetNumber, sf.StreetName]
-        .filter(Boolean)
-        .join(' ');
+    this.logger.log(
+      `Searching Giddy Digs API: ${JSON.stringify(requestBody)}`,
+    );
 
+    const response = await fetch(`${this.apiUrl}/api/property-search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Giddy Digs API error: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    const data = await response.json();
+    const properties: any[] = data.properties || [];
+
+    this.logger.log(
+      `API returned ${properties.length} of ${data.totalQuantity ?? '?'} total`,
+    );
+
+    return properties.map((prop) => {
+      const sf = prop.StandardFields || {};
       return {
-        address: streetParts || 'Address unavailable',
+        address: sf.UnparsedAddress || 'Address unavailable',
         city: sf.City || 'Unknown',
         state: sf.StateOrProvince || '',
         price: sf.CurrentPrice || 0,
@@ -97,9 +116,9 @@ export class ListingsService {
         baths: sf.BathsTotal || 0,
         sqft: sf.LivingArea || null,
         yearBuilt: sf.YearBuilt || null,
-        propertyType: sf.PropertyType || 'Residential',
-        status: sf.StandardStatus || 'Active',
-        listAgent: sf.ListAgentName || null,
+        propertyType: sf.PropertyTypeLabel || 'Residential',
+        status: sf.MlsStatus || 'Active',
+        listAgent: null,
       };
     });
   }
@@ -107,13 +126,19 @@ export class ListingsService {
   /**
    * Format search results for conversational use by the AI voice assistant.
    */
-  formatForConversation(results: ListingResult[], params: ListingSearchParams): string {
+  formatForConversation(
+    results: ListingResult[],
+    params: ListingSearchParams,
+  ): string {
     if (results.length === 0) {
       const parts: string[] = [];
       if (params.city) parts.push(`in ${params.city}`);
-      if (params.minBeds) parts.push(`with at least ${params.minBeds} bedrooms`);
-      if (params.minBaths) parts.push(`with at least ${params.minBaths} bathrooms`);
-      if (params.maxPrice) parts.push(`under $${params.maxPrice.toLocaleString()}`);
+      if (params.minBeds)
+        parts.push(`with at least ${params.minBeds} bedrooms`);
+      if (params.minBaths)
+        parts.push(`with at least ${params.minBaths} bathrooms`);
+      if (params.maxPrice)
+        parts.push(`under $${params.maxPrice.toLocaleString()}`);
       return `No active listings found${parts.length ? ' ' + parts.join(' ') : ''}. The caller may want to adjust their criteria or speak with Joe for more options.`;
     }
 
@@ -125,7 +150,8 @@ export class ListingsService {
       ];
       if (r.sqft) parts.push(`${r.sqft.toLocaleString()} sqft`);
       if (r.yearBuilt) parts.push(`built ${r.yearBuilt}`);
-      if (r.propertyType !== 'Residential') parts.push(`Type: ${r.propertyType}`);
+      if (r.propertyType !== 'Residential')
+        parts.push(`Type: ${r.propertyType}`);
       return parts.join(', ');
     });
 
