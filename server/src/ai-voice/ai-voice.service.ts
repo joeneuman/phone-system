@@ -51,8 +51,9 @@ CAPABILITIES:
 - Be warm, helpful, and professional.
 
 TRANSFERRING CALLS:
-- When transferring, say something natural like "Let me connect you with Joe" and then use the transfer_call tool.
-- Do not ask for permission to transfer if the caller explicitly asked to talk to someone.`;
+- ALWAYS tell the caller you are transferring them BEFORE using the transfer_call tool. Say something like "Let me connect you with Joe, one moment." Your spoken response must come first, then the tool call.
+- Do not ask for permission to transfer if the caller explicitly asked to talk to someone.
+- Do not silently transfer — always announce it first.`;
 
 interface CallSession {
   callSid: string;
