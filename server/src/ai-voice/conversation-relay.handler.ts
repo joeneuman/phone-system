@@ -55,10 +55,6 @@ export function setupConversationRelayWebSocket(
 
           console.log(`[${callSid}] Caller: "${userText}"`);
 
-          // Send immediate filler phrase to mask latency
-          const filler = aiVoiceService.getRandomFiller();
-          sendText(ws, filler, false);
-
           // Stream Claude's response
           const responseStream = aiVoiceService.streamResponse(callSid, userText);
           for await (const chunk of responseStream) {
