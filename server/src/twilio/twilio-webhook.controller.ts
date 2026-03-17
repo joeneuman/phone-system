@@ -83,6 +83,7 @@ export class TwilioWebhookController {
         transcriptionProvider: 'deepgram',
         language: 'en-US',
         interruptible: 'true',
+        speechRate: '0.9',
         welcomeGreeting: "Giddy DIGS! ... This is Lucy, how can I help you?",
       });
     } else {
