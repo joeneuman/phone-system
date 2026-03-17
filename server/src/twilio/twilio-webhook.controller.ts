@@ -78,8 +78,8 @@ export class TwilioWebhookController {
       const wsUrl = publicUrl.replace(/^https?:\/\//, 'wss://') + '/ws/conversation-relay';
       connect.conversationRelay({
         url: wsUrl,
-        ttsProvider: 'elevenlabs',
-        voice: this.config.get<string>('ELEVENLABS_VOICE_ID') || 'Sarah',
+        ttsProvider: 'google',
+        voice: 'en-US-Studio-O',
         transcriptionProvider: 'deepgram',
         language: 'en-US',
         interruptible: 'true',
