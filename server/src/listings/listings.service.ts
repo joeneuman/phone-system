@@ -86,7 +86,7 @@ export class ListingsService {
       `Searching Giddy Digs API: ${JSON.stringify(requestBody)}`,
     );
 
-    const response = await fetch(`${this.apiUrl}/api/property-search`, {
+    const response = await fetch(`${this.apiUrl}/_api/property-search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody),

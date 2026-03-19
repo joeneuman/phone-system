@@ -144,6 +144,38 @@ export class TwilioWebhookController {
   }
 
   /**
+   * Called after a transfer attempt from Lucy. If Joe doesn't answer,
+   * reconnect back to Lucy instead of going to voicemail.
+   */
+  @Post('voice/transfer-complete')
+  async handleTransferComplete(@Body() body: any, @Res() res: Response) {
+    const twiml = new VoiceResponse();
+    const dialStatus = body.DialCallStatus;
+
+    if (['no-answer', 'busy', 'failed', 'canceled'].includes(dialStatus)) {
+      // Joe didn't answer — reconnect to Lucy
+      const publicUrl = this.twilioService.getPublicUrl();
+      const connect = twiml.connect();
+      const wsUrl = publicUrl.replace(/^https?:\/\//, 'wss://') + '/ws/conversation-relay';
+      connect.conversationRelay({
+        url: wsUrl,
+        ttsProvider: 'ElevenLabs',
+        voice: 'XrExE9yKIg1WjnnlVkGX',
+        elevenlabsTextNormalization: 'on',
+        transcriptionProvider: 'deepgram',
+        language: 'en-US',
+        interruptible: 'true',
+        welcomeGreeting: "Hey, sorry about that, Joe wasn't available. How else can I help you!",
+      });
+    } else {
+      twiml.hangup();
+    }
+
+    res.type('text/xml');
+    res.send(twiml.toString());
+  }
+
+  /**
    * Called when a call status changes (ringing, in-progress, completed, etc.)
    */
   @Post('voice/status')
