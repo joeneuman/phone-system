@@ -79,7 +79,7 @@ export class TwilioWebhookController {
       connect.conversationRelay({
         url: wsUrl,
         ttsProvider: 'ElevenLabs',
-        voice: 'XrExE9yKIg1WjnnlVkGX',
+        voice: 'bTeCO7g7eD6buI6mptwI',
         elevenlabsTextNormalization: 'on',
         transcriptionProvider: 'deepgram',
         language: 'en-US',
@@ -160,7 +160,7 @@ export class TwilioWebhookController {
       connect.conversationRelay({
         url: wsUrl,
         ttsProvider: 'ElevenLabs',
-        voice: 'XrExE9yKIg1WjnnlVkGX',
+        voice: 'bTeCO7g7eD6buI6mptwI',
         elevenlabsTextNormalization: 'on',
         transcriptionProvider: 'deepgram',
         language: 'en-US',
