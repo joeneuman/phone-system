@@ -300,9 +300,9 @@ export class AiVoiceService implements OnModuleInit {
           const params = block.input as any;
           console.log(`Searching listings:`, params);
           try {
-            const results = await this.listingsService.searchProperties(params);
-            const formatted = this.listingsService.formatForConversation(results, params);
-            console.log(`Found ${results.length} listings`);
+            const { listings, totalCount } = await this.listingsService.searchProperties(params);
+            const formatted = this.listingsService.formatForConversation(listings, totalCount, params);
+            console.log(`Found ${listings.length} of ${totalCount} total listings`);
             toolResults.push({
               type: 'tool_result',
               tool_use_id: block.id,

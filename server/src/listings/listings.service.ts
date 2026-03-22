@@ -37,7 +37,7 @@ export class ListingsService {
 
   async searchProperties(
     params: ListingSearchParams,
-  ): Promise<ListingResult[]> {
+  ): Promise<{ listings: ListingResult[]; totalCount: number }> {
     const searchData: Record<string, any> = {};
 
     if (params.city) {
@@ -79,7 +79,7 @@ export class ListingsService {
     const requestBody = {
       searchData,
       page: 1,
-      pageLimit: 5,
+      pageLimit: 10,
     };
 
     this.logger.log(
@@ -101,11 +101,13 @@ export class ListingsService {
     const data = await response.json();
     const properties: any[] = data.properties || [];
 
+    const totalCount = data.totalQuantity ?? properties.length;
+
     this.logger.log(
-      `API returned ${properties.length} of ${data.totalQuantity ?? '?'} total`,
+      `API returned ${properties.length} of ${totalCount} total`,
     );
 
-    return properties.map((prop) => {
+    const listings = properties.map((prop) => {
       const sf = prop.StandardFields || {};
       return {
         address: sf.UnparsedAddress || 'Address unavailable',
@@ -121,6 +123,8 @@ export class ListingsService {
         listAgent: null,
       };
     });
+
+    return { listings, totalCount };
   }
 
   /**
@@ -128,6 +132,7 @@ export class ListingsService {
    */
   formatForConversation(
     results: ListingResult[],
+    totalCount: number,
     params: ListingSearchParams,
   ): string {
     if (results.length === 0) {
@@ -155,7 +160,10 @@ export class ListingsService {
       return parts.join(', ');
     });
 
-    const summary = `Found ${results.length} listing${results.length > 1 ? 's' : ''}`;
-    return `${summary}:\n${lines.join('\n')}\n\nPresent these to the caller conversationally — do not read out raw data. Mention key highlights naturally, and offer to share more details or connect them with Joe.`;
+    const showingNote = totalCount > results.length
+      ? `There are ${totalCount} total listings matching this search. Here are ${results.length} of them`
+      : `Found ${totalCount} listing${totalCount > 1 ? 's' : ''} total`;
+
+    return `${showingNote}:\n${lines.join('\n')}\n\nPresent these to the caller conversationally — do not read out raw data. Mention the total number of listings available, share a few highlights naturally, and offer to narrow the search or connect them with Joe for more options.`;
   }
 }
