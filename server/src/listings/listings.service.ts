@@ -23,6 +23,13 @@ export interface ListingResult {
   propertyType: string;
   status: string;
   listAgent: string | null;
+  description: string | null;
+  lotSize: string | null;
+  garageSpaces: number | null;
+  stories: number | null;
+  daysOnMarket: number | null;
+  hoaFee: string | null;
+  hoaIncludes: string | null;
 }
 
 @Injectable()
@@ -120,7 +127,14 @@ export class ListingsService {
         yearBuilt: sf.YearBuilt || null,
         propertyType: sf.PropertyTypeLabel || 'Residential',
         status: sf.MlsStatus || 'Active',
-        listAgent: null,
+        listAgent: sf.ListAgentName || null,
+        description: sf.PublicRemarks || null,
+        lotSize: sf.LotSizeArea || sf.LotSizeAcres ? `${sf.LotSizeArea || sf.LotSizeAcres}` : null,
+        garageSpaces: sf.GarageSpaces || null,
+        stories: sf.Stories || null,
+        daysOnMarket: sf.DaysOnMarket || null,
+        hoaFee: sf.AssociationFee ? `$${sf.AssociationFee} ${sf.AssociationFeeFrequency || ''}`.trim() : null,
+        hoaIncludes: sf.AssociationFeeIncludes || null,
       };
     });
 
@@ -157,6 +171,14 @@ export class ListingsService {
       if (r.yearBuilt) parts.push(`built ${r.yearBuilt}`);
       if (r.propertyType !== 'Residential')
         parts.push(`Type: ${r.propertyType}`);
+      if (r.lotSize) parts.push(`Lot: ${r.lotSize}`);
+      if (r.garageSpaces) parts.push(`${r.garageSpaces}-car garage`);
+      if (r.stories) parts.push(`${r.stories} ${r.stories === 1 ? 'story' : 'stories'}`);
+      if (r.daysOnMarket) parts.push(`${r.daysOnMarket} days on market`);
+      if (r.hoaFee) parts.push(`Total Dues/Fees: ${r.hoaFee}`);
+      if (r.hoaIncludes) parts.push(`Dues include: ${r.hoaIncludes}`);
+      if (r.listAgent) parts.push(`Listed by: ${r.listAgent}`);
+      if (r.description) parts.push(`Description: ${r.description}`);
       return parts.join(', ');
     });
 
