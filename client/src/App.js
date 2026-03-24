@@ -301,6 +301,7 @@ function App() {
         forwardingEnabled={forwardingEnabled}
         forwardingLoading={forwardingLoading}
         onToggleForwarding={toggleForwarding}
+        username={authUser?.username}
         activeNumber={activeNumber}
         availableNumbers={availableNumbers}
         numberSwitching={numberSwitching}
@@ -308,9 +309,6 @@ function App() {
       />
 
       <main className="main-content">
-        <div className="phone-auth-pill">
-          Admin: {authUser?.username || 'Unknown'}
-        </div>
         {phone.incomingCall && (
           <IncomingCallModal
             callerNumber={phone.incomingCall.parameters?.From || 'Unknown'}

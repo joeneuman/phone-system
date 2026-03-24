@@ -19,6 +19,7 @@ export function Sidebar({
   forwardingEnabled,
   forwardingLoading,
   onToggleForwarding,
+  username,
   activeNumber,
   availableNumbers,
   numberSwitching,
@@ -75,6 +76,11 @@ export function Sidebar({
         className={`sidebar-status ${deviceReady && socketConnected ? 'connected' : 'disconnected'}`}
         title={deviceReady ? 'Phone ready' : 'Connecting...'}
       />
+      {username && (
+        <div className="sidebar-username" title={`Logged in as ${username}`}>
+          {username}
+        </div>
+      )}
       <button className="sidebar-btn" onClick={onLogout} title="Logout">
         ⇦
       </button>
