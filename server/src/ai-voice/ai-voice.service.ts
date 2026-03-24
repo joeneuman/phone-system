@@ -4,7 +4,8 @@ import { TwilioService } from '../twilio/twilio.service';
 import { SettingsService } from '../settings/settings.service';
 import { CallsService } from '../calls/calls.service';
 import { ContactsService } from '../contacts/contacts.service';
-import { ListingsService } from '../listings/listings.service';
+import { ListingsService, ListingResult, ListingSearchParams } from '../listings/listings.service';
+import { MessagesService } from '../messages/messages.service';
 import Anthropic from '@anthropic-ai/sdk';
 
 const FILLER_PHRASES = [
@@ -48,6 +49,11 @@ CAPABILITIES:
 - You can answer general questions about Giddy Digs and real estate.
 - You CAN search property listings! Use the search_listings tool when a caller asks about available properties, homes for sale, what's on the market, etc.
 - When presenting listing results, share them conversationally across multiple turns — mention one or two highlights at a time, not all at once. Use natural phrasing for prices and details.
+- You CAN send text messages to the caller! Use the send_text tool to text them links to property listings or search results.
+- After presenting search results, proactively offer to text the caller a link so they can browse the listings on their phone.
+- When a caller asks about a specific listing and seems interested, offer to text them the link.
+- Keep text messages short and friendly, like "Here are those St. George listings! 🏡" followed by the link.
+- Never read out URLs on the phone — if you need to share a link, text it instead.
 - If the caller wants more detail than you have, or wants to schedule a showing, offer to connect them with Joe.
 - If the caller wants to speak with Joe (the agent/owner), use the transfer_call tool to connect them.
 - Be warm, helpful, and professional.
@@ -66,6 +72,8 @@ interface CallSession {
   messages: Array<{ role: 'user' | 'assistant'; content: any }>;
   abortController: AbortController | null;
   isPlaying: boolean;
+  lastSearchResults: ListingResult[];
+  lastSearchParams: ListingSearchParams | null;
 }
 
 @Injectable()
@@ -80,6 +88,7 @@ export class AiVoiceService implements OnModuleInit {
     private callsService: CallsService,
     private contactsService: ContactsService,
     private listingsService: ListingsService,
+    private messagesService: MessagesService,
   ) {}
 
   onModuleInit() {
@@ -100,6 +109,8 @@ export class AiVoiceService implements OnModuleInit {
       messages: [],
       abortController: null,
       isPlaying: false,
+      lastSearchResults: [],
+      lastSearchParams: null,
     };
     this.sessions.set(callSid, session);
     return session;
@@ -186,6 +197,32 @@ export class AiVoiceService implements OnModuleInit {
             },
           },
           required: [],
+        },
+      },
+      {
+        name: 'send_text',
+        description:
+          'Send a text message (SMS) to the caller. Use this to text them a link to property listings or search results. The message is sent to the phone number they are calling from.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            message: {
+              type: 'string',
+              description:
+                'The text message body to send. Keep it concise and friendly. Do NOT include URLs — the link will be appended automatically.',
+            },
+            listingIndex: {
+              type: 'number',
+              description:
+                'The 1-based index of a specific listing from the most recent search results to link to. For example, 1 for the first listing.',
+            },
+            sendSearchResults: {
+              type: 'boolean',
+              description:
+                'If true, sends a link to the full search results page instead of a specific listing.',
+            },
+          },
+          required: ['message'],
         },
       },
     ];
@@ -301,6 +338,8 @@ export class AiVoiceService implements OnModuleInit {
           console.log(`Searching listings:`, params);
           try {
             const { listings, totalCount } = await this.listingsService.searchProperties(params);
+            session.lastSearchResults = listings;
+            session.lastSearchParams = params;
             const formatted = this.listingsService.formatForConversation(listings, totalCount, params);
             console.log(`Found ${listings.length} of ${totalCount} total listings`);
             toolResults.push({
@@ -314,6 +353,50 @@ export class AiVoiceService implements OnModuleInit {
               type: 'tool_result',
               tool_use_id: block.id,
               content: 'Sorry, the listing search is temporarily unavailable. Offer to connect the caller with Joe instead.',
+            });
+          }
+        } else if (block.name === 'send_text') {
+          const params = block.input as any;
+          console.log(`Sending text to ${session.from}:`, params);
+          try {
+            let longUrl = '';
+            if (params.listingIndex && session.lastSearchResults.length > 0) {
+              const idx = params.listingIndex - 1;
+              const listing = session.lastSearchResults[idx];
+              if (listing) {
+                longUrl = this.listingsService.buildListingUrl(listing);
+              }
+            } else if (params.sendSearchResults && session.lastSearchParams) {
+              longUrl = this.listingsService.buildSearchUrl(session.lastSearchParams);
+            } else if (session.lastSearchParams) {
+              longUrl = this.listingsService.buildSearchUrl(session.lastSearchParams);
+            }
+
+            let smsBody = params.message;
+            if (longUrl) {
+              const shortUrl = await this.listingsService.shortenUrl(longUrl);
+              smsBody += `\n${shortUrl}`;
+            }
+
+            const twilioMsg = await this.twilioService.sendSms(session.from, smsBody);
+            await this.messagesService.sendMessage({
+              to: session.from,
+              body: smsBody,
+              from: this.twilioService.getSmsNumber(),
+              twilioSid: twilioMsg.sid,
+            });
+            console.log(`Text sent to ${session.from}`);
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: 'Text message sent successfully.',
+            });
+          } catch (err) {
+            console.error('Send text error:', err);
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: 'Sorry, I was unable to send the text message right now. Let the caller know and offer an alternative.',
             });
           }
         }

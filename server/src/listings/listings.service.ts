@@ -12,6 +12,7 @@ export interface ListingSearchParams {
 }
 
 export interface ListingResult {
+  listingId: string;
   address: string;
   city: string;
   state: string;
@@ -117,6 +118,7 @@ export class ListingsService {
     const listings = properties.map((prop) => {
       const sf = prop.StandardFields || {};
       return {
+        listingId: prop.Id || sf.ListingId || sf.ListingKey || '',
         address: sf.UnparsedAddress || 'Address unavailable',
         city: sf.City || 'Unknown',
         state: sf.StateOrProvince || '',
@@ -186,6 +188,48 @@ export class ListingsService {
       ? `There are ${totalCount} total listings matching this search. Here are ${results.length} of them`
       : `Found ${totalCount} listing${totalCount > 1 ? 's' : ''} total`;
 
-    return `${showingNote}:\n${lines.join('\n')}\n\nPresent these to the caller conversationally — do not read out raw data. Mention the total number of listings available, share a few highlights naturally, and offer to narrow the search or connect them with Joe for more options.`;
+    return `${showingNote}:\n${lines.join('\n')}\n\nPresent these to the caller conversationally — do not read out raw data. Mention the total number of listings available, share a few highlights naturally, and offer to narrow the search or connect them with Joe for more options.\nYou can offer to text the caller a link to these search results or to any specific listing. Use the send_text tool to do so.`;
+  }
+
+  buildSearchUrl(params: ListingSearchParams): string {
+    const base = this.apiUrl;
+    const query = new URLSearchParams();
+    query.set('mode', 'search');
+    if (params.city) query.set('city', params.city);
+    if (params.minPrice != null) query.set('minPrice', String(params.minPrice));
+    if (params.maxPrice != null) query.set('maxPrice', String(params.maxPrice));
+    if (params.minBeds != null) query.set('beds', String(params.minBeds));
+    if (params.minBaths != null) query.set('baths', String(params.minBaths));
+    if (params.propertyType) query.set('type', params.propertyType);
+    return `${base}/?${query.toString()}`;
+  }
+
+  buildListingUrl(listing: ListingResult): string {
+    const slug = listing.address
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-');
+    const city = listing.city.toLowerCase().replace(/\s+/g, '-');
+    const state = listing.state.toLowerCase() || 'utah';
+    return `${this.apiUrl}/${state}/${city}/${slug}-${listing.listingId}`;
+  }
+
+  async shortenUrl(longUrl: string): Promise<string> {
+    try {
+      const response = await fetch(`${this.apiUrl}/api/short-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: longUrl }),
+      });
+      if (!response.ok) {
+        this.logger.warn(`URL shortener error: ${response.status}`);
+        return longUrl;
+      }
+      const data = await response.json();
+      return data.shortUrl || longUrl;
+    } catch (err) {
+      this.logger.warn(`URL shortener unavailable, using full URL: ${err.message}`);
+      return longUrl;
+    }
   }
 }
