@@ -52,6 +52,9 @@ function App() {
   const [totalUnread, setTotalUnread] = useState(0);
   const [forwardingEnabled, setForwardingEnabled] = useState(false);
   const [forwardingLoading, setForwardingLoading] = useState(false);
+  const [activeNumber, setActiveNumber] = useState('');
+  const [availableNumbers, setAvailableNumbers] = useState([]);
+  const [numberSwitching, setNumberSwitching] = useState(false);
 
   useEffect(() => {
     async function validateExistingSession() {
@@ -137,6 +140,26 @@ function App() {
     } catch (e) { console.error('Failed to load forwarding setting', e); }
   }, []);
 
+  const loadPhoneNumbers = useCallback(async () => {
+    try {
+      const [numbersData, activeData] = await Promise.all([
+        api.getPhoneNumbers(),
+        api.getActiveNumber(),
+      ]);
+      setAvailableNumbers(numbersData.numbers || []);
+      setActiveNumber(activeData.number || '');
+    } catch (e) { console.error('Failed to load phone numbers', e); }
+  }, []);
+
+  const switchNumber = useCallback(async (number) => {
+    setNumberSwitching(true);
+    try {
+      await api.setActiveNumber(number);
+      setActiveNumber(number);
+    } catch (e) { console.error('Failed to switch number', e); }
+    setNumberSwitching(false);
+  }, []);
+
   const toggleForwarding = useCallback(async () => {
     setForwardingLoading(true);
     try {
@@ -154,7 +177,8 @@ function App() {
     loadCallHistory();
     loadVoicemails();
     loadForwarding();
-  }, [isReady, loadConversations, loadContacts, loadCallHistory, loadVoicemails, loadForwarding]);
+    loadPhoneNumbers();
+  }, [isReady, loadConversations, loadContacts, loadCallHistory, loadVoicemails, loadForwarding, loadPhoneNumbers]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -277,6 +301,10 @@ function App() {
         forwardingEnabled={forwardingEnabled}
         forwardingLoading={forwardingLoading}
         onToggleForwarding={toggleForwarding}
+        activeNumber={activeNumber}
+        availableNumbers={availableNumbers}
+        numberSwitching={numberSwitching}
+        onSwitchNumber={switchNumber}
       />
 
       <main className="main-content">

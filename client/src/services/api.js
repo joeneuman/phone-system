@@ -78,6 +78,13 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ enabled, number }),
     }),
+  getPhoneNumbers: () => request('/settings/phone-numbers'),
+  getActiveNumber: () => request('/settings/active-number'),
+  setActiveNumber: (number) =>
+    request('/settings/active-number', {
+      method: 'PUT',
+      body: JSON.stringify({ number }),
+    }),
 
   // GIDDY DIGS auth bridge (staging first, production via env switch)
   authLogin: (username, password) =>

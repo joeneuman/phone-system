@@ -19,7 +19,14 @@ export function Sidebar({
   forwardingEnabled,
   forwardingLoading,
   onToggleForwarding,
+  activeNumber,
+  availableNumbers,
+  numberSwitching,
+  onSwitchNumber,
 }) {
+  const activeLabel = availableNumbers.find((n) => n.number === activeNumber)?.label || activeNumber;
+  const otherNumbers = availableNumbers.filter((n) => n.number !== activeNumber);
+
   return (
     <nav className="sidebar">
       {VIEWS.map((v) => (
@@ -39,6 +46,22 @@ export function Sidebar({
         </button>
       ))}
       <div className="sidebar-spacer" />
+      {availableNumbers.length > 1 && (
+        <div className="sidebar-number-switcher" title="Active number — click to switch">
+          <span className="sidebar-number-label">{activeLabel}</span>
+          {otherNumbers.map((n) => (
+            <button
+              key={n.number}
+              className="sidebar-btn sidebar-number-switch-btn"
+              onClick={() => onSwitchNumber(n.number)}
+              disabled={numberSwitching}
+              title={`Switch to ${n.label}`}
+            >
+              ⇄
+            </button>
+          ))}
+        </div>
+      )}
       <button
         className={`sidebar-btn forwarding-toggle ${forwardingEnabled ? 'forwarding-on' : ''}`}
         onClick={onToggleForwarding}

@@ -1,5 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SettingsService } from '../settings/settings.service';
 import * as TwilioLib from 'twilio';
 const Twilio = require('twilio');
 
@@ -14,8 +15,12 @@ export class TwilioService implements OnModuleInit {
   private phoneNumber: string;
   private smsNumber: string;
   private publicUrl: string;
+  availableNumbers: { number: string; label: string }[];
 
-  constructor(private config: ConfigService) {}
+  constructor(
+    private config: ConfigService,
+    private settingsService: SettingsService,
+  ) {}
 
   onModuleInit() {
     this.accountSid = this.config.get<string>('TWILIO_ACCOUNT_SID') || '';
@@ -27,6 +32,30 @@ export class TwilioService implements OnModuleInit {
     this.smsNumber = this.config.get<string>('TWILIO_SMS_NUMBER') || this.phoneNumber;
     this.publicUrl = this.config.get<string>('PUBLIC_URL') || '';
     this.client = Twilio(this.accountSid, this.authToken);
+
+    // Build available numbers list from env
+    this.availableNumbers = [
+      { number: this.phoneNumber, label: this.formatLabel(this.phoneNumber) },
+    ];
+    const num2 = this.config.get<string>('TWILIO_PHONE_NUMBER_2');
+    if (num2) {
+      this.availableNumbers.push({ number: num2, label: this.formatLabel(num2) });
+    }
+  }
+
+  private formatLabel(e164: string): string {
+    const d = e164.replace(/^\+1/, '');
+    return d.length === 10
+      ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`
+      : e164;
+  }
+
+  async getActiveNumber(): Promise<string> {
+    const saved = await this.settingsService.get('activePhoneNumber');
+    if (saved && this.availableNumbers.some((n) => n.number === saved)) {
+      return saved;
+    }
+    return this.phoneNumber;
   }
 
   getClient() {
@@ -67,7 +96,7 @@ export class TwilioService implements OnModuleInit {
   async sendSms(to: string, body: string, mediaUrls?: string[]): Promise<any> {
     const opts: any = {
       to,
-      from: this.smsNumber,
+      from: await this.getActiveNumber(),
       body,
     };
     if (mediaUrls?.length) {

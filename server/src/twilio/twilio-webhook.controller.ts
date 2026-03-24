@@ -34,7 +34,7 @@ export class TwilioWebhookController {
 
     if (to) {
       const dial = twiml.dial({
-        callerId: this.twilioService.getPhoneNumber(),
+        callerId: await this.twilioService.getActiveNumber(),
         answerOnBridge: true,
       });
 

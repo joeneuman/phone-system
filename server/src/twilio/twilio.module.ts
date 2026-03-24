@@ -6,7 +6,6 @@ import { CallsModule } from '../calls/calls.module';
 import { MessagesModule } from '../messages/messages.module';
 import { VoicemailModule } from '../voicemail/voicemail.module';
 import { ContactsModule } from '../contacts/contacts.module';
-
 @Global()
 @Module({
   imports: [
