@@ -62,15 +62,19 @@ export class TwilioWebhookController {
     const callSid = body.CallSid;
     const publicUrl = this.twilioService.getPublicUrl();
 
-    await this.callsService.logCall({
-      sid: callSid,
-      from,
-      to: this.twilioService.getPhoneNumber(),
-      direction: 'inbound',
-      status: 'ringing',
-    });
+    try {
+      await this.callsService.logCall({
+        sid: callSid,
+        from,
+        to: this.twilioService.getPhoneNumber() || 'unknown',
+        direction: 'inbound',
+        status: 'ringing',
+      });
+    } catch (e) {
+      console.error('Failed to log incoming call:', e.message);
+    }
 
-    const hasAiKey = !!this.config.get<string>('ANTHROPIC_API_KEY');
+    const hasAiKey = !!this.config.get<string>('XAI_API_KEY');
 
     if (hasAiKey) {
       // Route to AI attendant via ConversationRelay
