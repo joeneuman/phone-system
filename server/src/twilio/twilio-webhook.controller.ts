@@ -74,7 +74,7 @@ export class TwilioWebhookController {
       console.error('Failed to log incoming call:', e.message);
     }
 
-    const hasAiKey = !!this.config.get<string>('XAI_API_KEY');
+    const hasAiKey = !!this.config.get<string>('ANTHROPIC_API_KEY');
 
     if (hasAiKey) {
       // Route to AI attendant via ConversationRelay

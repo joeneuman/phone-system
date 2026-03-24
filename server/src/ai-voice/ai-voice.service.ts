@@ -6,7 +6,7 @@ import { CallsService } from '../calls/calls.service';
 import { ContactsService } from '../contacts/contacts.service';
 import { ListingsService, ListingResult, ListingSearchParams } from '../listings/listings.service';
 import { MessagesService } from '../messages/messages.service';
-import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 
 const FILLER_PHRASES = [
   'Uh-huh...',
@@ -69,7 +69,7 @@ interface CallSession {
   callSid: string;
   streamSid: string;
   from: string;
-  messages: OpenAI.Chat.ChatCompletionMessageParam[];
+  messages: Array<{ role: 'user' | 'assistant'; content: any }>;
   abortController: AbortController | null;
   isPlaying: boolean;
   lastSearchResults: ListingResult[];
@@ -78,8 +78,7 @@ interface CallSession {
 
 @Injectable()
 export class AiVoiceService implements OnModuleInit {
-  private openai: OpenAI;
-  private modelName: string;
+  private anthropic: Anthropic;
   private sessions: Map<string, CallSession> = new Map();
 
   constructor(
@@ -93,16 +92,12 @@ export class AiVoiceService implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    const apiKey = this.config.get<string>('XAI_API_KEY');
+    const apiKey = this.config.get<string>('ANTHROPIC_API_KEY');
     if (apiKey) {
-      this.openai = new OpenAI({
-        apiKey,
-        baseURL: 'https://api.x.ai/v1',
-      });
-      this.modelName = this.config.get<string>('XAI_VOICE_MODEL') || 'grok-4-1-fast';
-      console.log(`AI Voice service initialized with xAI Grok (${this.modelName})`);
+      this.anthropic = new Anthropic({ apiKey });
+      console.log('AI Voice service initialized with Anthropic API');
     } else {
-      console.warn('XAI_API_KEY not set — AI voice attendant disabled');
+      console.warn('ANTHROPIC_API_KEY not set — AI voice attendant disabled');
     }
   }
 
@@ -148,95 +143,86 @@ export class AiVoiceService implements OnModuleInit {
     }
   }
 
-  private getTools(): OpenAI.Chat.ChatCompletionTool[] {
+  private getTools(): Anthropic.Tool[] {
     return [
       {
-        type: 'function',
-        function: {
-          name: 'transfer_call',
-          description:
-            'Transfer the caller to Joe (the Giddy Digs agent/owner). Use this when the caller wants to speak to a person, or when the conversation requires human assistance.',
-          parameters: {
-            type: 'object',
-            properties: {
-              reason: {
-                type: 'string',
-                description: 'Brief reason for the transfer',
-              },
+        name: 'transfer_call',
+        description:
+          'Transfer the caller to Joe (the Giddy Digs agent/owner). Use this when the caller wants to speak to a person, or when the conversation requires human assistance.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            reason: {
+              type: 'string',
+              description: 'Brief reason for the transfer',
             },
-            required: ['reason'],
           },
+          required: ['reason'],
         },
       },
       {
-        type: 'function',
-        function: {
-          name: 'search_listings',
-          description:
-            'Search available property listings. Use when the caller asks about homes for sale, available properties, or what is on the market. Extract search criteria from the conversation.',
-          parameters: {
-            type: 'object',
-            properties: {
-              city: {
-                type: 'string',
-                description: 'City to search in (e.g. "St George", "Washington", "Hurricane")',
-              },
-              minPrice: {
-                type: 'number',
-                description: 'Minimum price filter',
-              },
-              maxPrice: {
-                type: 'number',
-                description: 'Maximum price filter',
-              },
-              minBeds: {
-                type: 'number',
-                description: 'Minimum number of bedrooms',
-              },
-              minBaths: {
-                type: 'number',
-                description: 'Minimum number of bathrooms',
-              },
-              status: {
-                type: 'string',
-                description: 'Listing status — defaults to Active',
-              },
-              propertyType: {
-                type: 'string',
-                description: 'Property type (e.g. "Residential", "Condo", "Townhouse", "Land")',
-              },
+        name: 'search_listings',
+        description:
+          'Search available property listings. Use when the caller asks about homes for sale, available properties, or what is on the market. Extract search criteria from the conversation.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            city: {
+              type: 'string',
+              description: 'City to search in (e.g. "St George", "Washington", "Hurricane")',
             },
-            required: [],
+            minPrice: {
+              type: 'number',
+              description: 'Minimum price filter',
+            },
+            maxPrice: {
+              type: 'number',
+              description: 'Maximum price filter',
+            },
+            minBeds: {
+              type: 'number',
+              description: 'Minimum number of bedrooms',
+            },
+            minBaths: {
+              type: 'number',
+              description: 'Minimum number of bathrooms',
+            },
+            status: {
+              type: 'string',
+              description: 'Listing status — defaults to Active',
+            },
+            propertyType: {
+              type: 'string',
+              description: 'Property type (e.g. "Residential", "Condo", "Townhouse", "Land")',
+            },
           },
+          required: [],
         },
       },
       {
-        type: 'function',
-        function: {
-          name: 'send_text',
-          description:
-            'Send a text message (SMS) to the caller. Use this to text them a link to property listings or search results. The message is sent to the phone number they are calling from.',
-          parameters: {
-            type: 'object',
-            properties: {
-              message: {
-                type: 'string',
-                description:
-                  'The text message body to send. Keep it concise and friendly. Do NOT include URLs — the link will be appended automatically.',
-              },
-              listingIndex: {
-                type: 'number',
-                description:
-                  'The 1-based index of a specific listing from the most recent search results to link to. For example, 1 for the first listing.',
-              },
-              sendSearchResults: {
-                type: 'boolean',
-                description:
-                  'If true, sends a link to the full search results page instead of a specific listing.',
-              },
+        name: 'send_text',
+        description:
+          'Send a text message (SMS) to the caller. Use this to text them a link to property listings or search results. The message is sent to the phone number they are calling from.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            message: {
+              type: 'string',
+              description:
+                'The text message body to send. Keep it concise and friendly. Do NOT include URLs — the link will be appended automatically.',
             },
-            required: ['message'],
+            listingIndex: {
+              type: 'number',
+              description:
+                'The 1-based index of a specific listing from the most recent search results to link to. For example, 1 for the first listing.',
+            },
+            sendSearchResults: {
+              type: 'boolean',
+              description:
+                'If true, sends a link to the full search results page instead of a specific listing.',
+            },
           },
+          required: ['message'],
         },
       },
     ];
@@ -249,7 +235,7 @@ export class AiVoiceService implements OnModuleInit {
     { type: 'text'; token: string; last: boolean } | { type: 'transfer'; reason: string }
   > {
     const session = this.sessions.get(callSid);
-    if (!session || !this.openai) return;
+    if (!session || !this.anthropic) return;
 
     session.messages.push({ role: 'user', content: userText });
 
@@ -257,12 +243,12 @@ export class AiVoiceService implements OnModuleInit {
     session.abortController = abortController;
 
     try {
-      yield* this.runGrokStream(session, abortController);
+      yield* this.runClaudeStream(session, abortController);
     } catch (err: any) {
       if (err.name === 'AbortError' || abortController.signal.aborted) {
         return;
       }
-      console.error('xAI API error:', err);
+      console.error('Claude API error:', err);
       yield {
         type: 'text',
         token: "I'm sorry, I'm having a little trouble right now. Let me connect you with Joe.",
@@ -275,67 +261,41 @@ export class AiVoiceService implements OnModuleInit {
     }
   }
 
-  private async *runGrokStream(
+  private async *runClaudeStream(
     session: CallSession,
     abortController: AbortController,
   ): AsyncGenerator<
     { type: 'text'; token: string; last: boolean } | { type: 'transfer'; reason: string }
   > {
-    const stream = await this.openai.chat.completions.create(
+    const stream = this.anthropic.messages.stream(
       {
-        model: this.modelName,
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 300,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          ...session.messages,
-        ],
+        system: SYSTEM_PROMPT,
+        messages: session.messages,
         tools: this.getTools(),
-        stream: true,
       },
       { signal: abortController.signal },
     );
 
-    let fullText = '';
+    let fullResponse = '';
     let ttsBuffer = '';
-    let finishReason = '';
 
-    // Accumulate tool call deltas by index
-    const toolCallsMap = new Map<number, { id: string; name: string; arguments: string }>();
-
-    for await (const chunk of stream) {
+    for await (const event of stream) {
       if (abortController.signal.aborted) break;
 
-      const choice = chunk.choices[0];
-      if (!choice) continue;
-
-      if (choice.finish_reason) {
-        finishReason = choice.finish_reason;
-      }
-
-      const delta = choice.delta;
-
-      // Stream text content
-      if (delta.content) {
-        fullText += delta.content;
-        ttsBuffer += delta.content;
+      if (
+        event.type === 'content_block_delta' &&
+        event.delta.type === 'text_delta'
+      ) {
+        const text = event.delta.text;
+        fullResponse += text;
+        ttsBuffer += text;
 
         const sentenceEnd = ttsBuffer.match(/[.!?,:;]\s/);
         if (sentenceEnd || ttsBuffer.length > 80) {
           yield { type: 'text', token: ttsBuffer, last: false };
           ttsBuffer = '';
-        }
-      }
-
-      // Accumulate tool call deltas
-      if (delta.tool_calls) {
-        for (const tc of delta.tool_calls) {
-          if (!toolCallsMap.has(tc.index)) {
-            toolCallsMap.set(tc.index, { id: '', name: '', arguments: '' });
-          }
-          const entry = toolCallsMap.get(tc.index)!;
-          if (tc.id) entry.id = tc.id;
-          if (tc.function?.name) entry.name = tc.function.name;
-          if (tc.function?.arguments) entry.arguments += tc.function.arguments;
         }
       }
     }
@@ -345,65 +305,74 @@ export class AiVoiceService implements OnModuleInit {
       yield { type: 'text', token: ttsBuffer, last: false };
     }
 
-    const toolCalls = Array.from(toolCallsMap.values());
+    const finalMessage = await stream.finalMessage();
 
-    if (finishReason === 'tool_calls' && toolCalls.length > 0) {
-      // Save assistant message with tool_calls to history
-      session.messages.push({
-        role: 'assistant',
-        content: fullText || null,
-        tool_calls: toolCalls.map((tc) => ({
-          id: tc.id,
-          type: 'function' as const,
-          function: { name: tc.name, arguments: tc.arguments },
-        })),
-      });
+    // Check if the response contains tool use
+    if (finalMessage.stop_reason === 'tool_use') {
+      // Save the assistant message (with tool_use blocks) to history
+      session.messages.push({ role: 'assistant', content: finalMessage.content });
+
+      // Process each tool use block
+      const toolResults: Array<{
+        type: 'tool_result';
+        tool_use_id: string;
+        content: string;
+      }> = [];
 
       let transferRequested = false;
       let transferReason = '';
 
-      for (const tc of toolCalls) {
-        let result = '';
-        let input: any = {};
-        try {
-          input = JSON.parse(tc.arguments);
-        } catch {
-          input = {};
-        }
+      for (const block of finalMessage.content) {
+        if (block.type !== 'tool_use') continue;
 
-        if (tc.name === 'transfer_call') {
-          transferReason = input.reason || 'Caller requested transfer';
+        if (block.name === 'transfer_call') {
+          transferReason = (block.input as any)?.reason || 'Caller requested transfer';
           transferRequested = true;
-          result = 'Transfer initiated.';
-        } else if (tc.name === 'search_listings') {
-          console.log('Searching listings:', input);
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: block.id,
+            content: 'Transfer initiated.',
+          });
+        } else if (block.name === 'search_listings') {
+          const params = block.input as any;
+          console.log(`Searching listings:`, params);
           try {
-            const { listings, totalCount } = await this.listingsService.searchProperties(input);
+            const { listings, totalCount } = await this.listingsService.searchProperties(params);
             session.lastSearchResults = listings;
-            session.lastSearchParams = input;
-            result = this.listingsService.formatForConversation(listings, totalCount, input);
+            session.lastSearchParams = params;
+            const formatted = this.listingsService.formatForConversation(listings, totalCount, params);
             console.log(`Found ${listings.length} of ${totalCount} total listings`);
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: formatted,
+            });
           } catch (err) {
             console.error('Listings search error:', err);
-            result =
-              'Sorry, the listing search is temporarily unavailable. Offer to connect the caller with Joe instead.';
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: 'Sorry, the listing search is temporarily unavailable. Offer to connect the caller with Joe instead.',
+            });
           }
-        } else if (tc.name === 'send_text') {
-          console.log(`Sending text to ${session.from}:`, input);
+        } else if (block.name === 'send_text') {
+          const params = block.input as any;
+          console.log(`Sending text to ${session.from}:`, params);
           try {
             let longUrl = '';
-            if (input.listingIndex && session.lastSearchResults.length > 0) {
-              const listing = session.lastSearchResults[input.listingIndex - 1];
+            if (params.listingIndex && session.lastSearchResults.length > 0) {
+              const idx = params.listingIndex - 1;
+              const listing = session.lastSearchResults[idx];
               if (listing) {
                 longUrl = this.listingsService.buildListingUrl(listing);
               }
-            } else if (input.sendSearchResults && session.lastSearchParams) {
+            } else if (params.sendSearchResults && session.lastSearchParams) {
               longUrl = this.listingsService.buildSearchUrl(session.lastSearchParams);
             } else if (session.lastSearchParams) {
               longUrl = this.listingsService.buildSearchUrl(session.lastSearchParams);
             }
 
-            let smsBody = input.message;
+            let smsBody = params.message;
             if (longUrl) {
               const shortUrl = await this.listingsService.shortenUrl(longUrl);
               smsBody += `\n${shortUrl}`;
@@ -417,38 +386,42 @@ export class AiVoiceService implements OnModuleInit {
               twilioSid: twilioMsg.sid,
             });
             console.log(`Text sent to ${session.from}`);
-            result = 'Text message sent successfully.';
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: 'Text message sent successfully.',
+            });
           } catch (err) {
             console.error('Send text error:', err);
-            result =
-              'Sorry, I was unable to send the text message right now. Let the caller know and offer an alternative.';
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: 'Sorry, I was unable to send the text message right now. Let the caller know and offer an alternative.',
+            });
           }
         }
-
-        // Add tool result as role: 'tool' message (OpenAI format)
-        session.messages.push({
-          role: 'tool',
-          tool_call_id: tc.id,
-          content: result,
-        });
       }
 
+      // Add tool results to the conversation
+      session.messages.push({ role: 'user', content: toolResults });
+
+      // If transfer was requested, signal it after yielding the text spoken so far
       if (transferRequested) {
         yield { type: 'text', token: '', last: true };
         yield { type: 'transfer', reason: transferReason };
         return;
       }
 
-      // Stream follow-up response with tool results
-      yield* this.runGrokStream(session, abortController);
+      // For search_listings: stream a follow-up response from Claude with the results
+      yield* this.runClaudeStream(session, abortController);
       return;
     }
 
-    // Normal text response — end stream
+    // No tool use — normal text response
     yield { type: 'text', token: '', last: true };
 
-    if (fullText) {
-      session.messages.push({ role: 'assistant', content: fullText });
+    if (fullResponse) {
+      session.messages.push({ role: 'assistant', content: fullResponse });
     }
   }
 
