@@ -124,8 +124,8 @@ export class TwilioWebhookController {
 
     if (['no-answer', 'busy', 'failed', 'canceled'].includes(dialStatus)) {
       twiml.say(
-        { voice: 'Polly.Joanna' },
-        "Hey, you've reached Giddy Digs. Leave a message after the beep and we'll get back to you.",
+        { voice: 'Google.en-US-Neural2-F' },
+        "Hey, you've reached GIDDY DIGS. Leave a message after the beep and we'll get back to you.",
       );
       twiml.record({
         maxLength: 120,
@@ -231,7 +231,7 @@ export class TwilioWebhookController {
   @Post('voicemail/complete')
   async handleVoicemailComplete(@Body() body: any, @Res() res: Response) {
     const twiml = new VoiceResponse();
-    twiml.say({ voice: 'Polly.Joanna' }, 'Thanks for your message. Goodbye.');
+    twiml.say({ voice: 'Google.en-US-Neural2-F' }, 'Thanks for your message. Goodbye.');
     twiml.hangup();
 
     if (body.RecordingSid) {

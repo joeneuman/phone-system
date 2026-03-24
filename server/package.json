@@ -21,6 +21,7 @@
     "class-validator": "^0.14.0",
     "libphonenumber-js": "^1.10.0",
     "mongoose": "^8.0.0",
+    "openai": "^6.32.0",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0",
     "twilio": "^5.0.0",
