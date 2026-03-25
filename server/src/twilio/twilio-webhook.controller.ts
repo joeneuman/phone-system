@@ -89,7 +89,7 @@ export class TwilioWebhookController {
         language: 'en-US',
         interruptible: 'true',
         interruptSensitivity: 'medium',
-        welcomeGreeting: "Hey there! Welcome to Giddy Digs, this is Lucy. How can I help you?",
+        welcomeGreeting: "GIDDY DIGS! This is Lucy, how can I help you?",
       });
     } else {
       // Fallback: no AI key — use direct routing
