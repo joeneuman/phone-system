@@ -257,14 +257,15 @@ export class AiVoiceService implements OnModuleInit {
       if (err.name === 'AbortError' || abortController.signal.aborted) {
         return;
       }
-      console.error('Claude API error:', err);
+      console.error('Claude API error:', err?.status, err?.message, err?.error || err);
+      // Pop the failed user message so conversation stays clean for retry
+      session.messages.pop();
       yield {
         type: 'text',
-        token: "I'm sorry, I'm having a little trouble right now. Let me connect you with Joe.",
+        token: "I'm sorry, could you say that again?",
         last: false,
       };
       yield { type: 'text', token: '', last: true };
-      yield { type: 'transfer', reason: 'AI error — fallback transfer' };
     } finally {
       session.abortController = null;
     }
