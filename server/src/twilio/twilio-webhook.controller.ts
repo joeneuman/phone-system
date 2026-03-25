@@ -81,14 +81,15 @@ export class TwilioWebhookController {
       const connect = twiml.connect();
       const wsUrl = publicUrl.replace(/^https?:\/\//, 'wss://') + '/ws/conversation-relay';
       connect.conversationRelay({
-        url: wsUrl,
+        url: `${wsUrl}?callerNumber=${encodeURIComponent(from)}`,
         ttsProvider: 'ElevenLabs',
-        voice: 'XrExE9yKIg1WjnnlVkGX',
+        voice: 'XrExE9yKIg1WjnnlVkGX-0.9_0.4_0.75',
         elevenlabsTextNormalization: 'on',
         transcriptionProvider: 'deepgram',
         language: 'en-US',
         interruptible: 'true',
-        welcomeGreeting: "GIDDY DIGS! This is Lucy, how can I help you?",
+        interruptSensitivity: 'medium',
+        welcomeGreeting: "Hey there! Welcome to Giddy Digs, this is Lucy. How can I help you?",
       });
     } else {
       // Fallback: no AI key — use direct routing

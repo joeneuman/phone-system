@@ -216,7 +216,8 @@ export class ListingsService {
 
   async shortenUrl(longUrl: string): Promise<string> {
     try {
-      const response = await fetch(`${this.apiUrl}/api/short-url`, {
+      const shortenerUrl = this.config.get<string>('URL_SHORTENER_URL') || 'https://gd3.io';
+      const response = await fetch(`${shortenerUrl}/api/short-url`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: longUrl }),

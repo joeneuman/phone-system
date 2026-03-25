@@ -24,8 +24,12 @@ export function setupConversationRelayWebSocket(
     // Let other upgrade requests pass through (e.g., Socket.io for browser clients)
   });
 
-  wss.on('connection', (ws: WebSocket) => {
+  wss.on('connection', (ws: WebSocket, request: any) => {
     console.log('ConversationRelay WebSocket connected');
+
+    // Extract caller number from query string (passed from webhook controller)
+    const url = new URL(request.url, 'http://localhost');
+    const callerNumberFromQuery = url.searchParams.get('callerNumber') || '';
 
     let callSid = '';
 
@@ -42,7 +46,7 @@ export function setupConversationRelayWebSocket(
         case 'setup': {
           callSid = msg.callSid || '';
           const streamSid = msg.streamSid || '';
-          const from = msg.from || '';
+          const from = callerNumberFromQuery || msg.from || '';
           aiVoiceService.createSession(callSid, streamSid, from);
           console.log(`AI session started for call ${callSid} from ${from}`);
           break;

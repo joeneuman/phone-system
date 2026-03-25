@@ -7,18 +7,19 @@ export function MessageThread({ conversation, onBack, onCall }) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [toNumber, setToNumber] = useState(conversation.phoneNumber || '');
+  const [convoId, setConvoId] = useState(conversation._id || null);
   const messagesEndRef = useRef(null);
 
   const loadMessages = useCallback(async () => {
-    if (!conversation._id) return;
+    if (!convoId) return;
     try {
-      const data = await api.getMessages(conversation._id);
+      const data = await api.getMessages(convoId);
       setMessages(data.reverse());
-      api.markConversationRead(conversation._id);
+      api.markConversationRead(convoId);
     } catch (e) {
       console.error('Failed to load messages', e);
     }
-  }, [conversation._id]);
+  }, [convoId]);
 
   useEffect(() => {
     loadMessages();
@@ -39,9 +40,13 @@ export function MessageThread({ conversation, onBack, onCall }) {
       if (!formatted.startsWith('+')) {
         formatted = '+1' + formatted.replace(/\D/g, '');
       }
-      await api.sendMessage(formatted, text.trim());
+      const sent = await api.sendMessage(formatted, text.trim());
       setText('');
-      loadMessages();
+      if (!convoId && sent?.conversation) {
+        setConvoId(sent.conversation);
+      } else {
+        loadMessages();
+      }
     } catch (e) {
       console.error('Failed to send message', e);
     } finally {
