@@ -6,6 +6,7 @@ import { MessagesService } from '../messages/messages.service';
 import { VoicemailService } from '../voicemail/voicemail.service';
 import { ContactsService } from '../contacts/contacts.service';
 import { SettingsService } from '../settings/settings.service';
+import { ListingsService } from '../listings/listings.service';
 import { ConfigService } from '@nestjs/config';
 const Twilio = require('twilio');
 const VoiceResponse = Twilio.twiml.VoiceResponse;
@@ -20,6 +21,7 @@ export class TwilioWebhookController {
     private voicemailService: VoicemailService,
     private contactsService: ContactsService,
     private settingsService: SettingsService,
+    private listingsService: ListingsService,
     private config: ConfigService,
   ) {}
 
@@ -214,6 +216,27 @@ export class TwilioWebhookController {
       twilioSid: body.MessageSid,
     });
 
+    // Check if the message is a sign code (single word/number from yard signs)
+    const trimmed = msgBody.trim();
+    const isSignCode = /^[a-zA-Z0-9]{1,20}$/.test(trimmed);
+
+    const twiml = new MessagingResponse();
+
+    if (isSignCode) {
+      const listing = await this.listingsService.lookupSignCode(trimmed);
+      if (listing) {
+        const price = `$${listing.price.toLocaleString()}`;
+        const details = [
+          `${listing.beds} bed ${listing.baths} bath`,
+          listing.sqft ? `${listing.sqft.toLocaleString()} sqft` : null,
+        ].filter(Boolean).join(' | ');
+
+        twiml.message(
+          `🏠 ${listing.address}, ${listing.city}\n💰 ${price} | ${details}\nView details: ${listing.url}`,
+        );
+      }
+    }
+
     // Forward SMS to personal cell if forwarding is enabled
     const forwarding = await this.settingsService.get('callForwarding');
     if (forwarding?.enabled && forwarding?.number) {
@@ -225,7 +248,6 @@ export class TwilioWebhookController {
       }
     }
 
-    const twiml = new MessagingResponse();
     res.type('text/xml');
     res.send(twiml.toString());
   }

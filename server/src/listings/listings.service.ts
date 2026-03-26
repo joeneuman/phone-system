@@ -14,7 +14,9 @@ export interface ListingSearchParams {
 export interface ListingResult {
   listingId: string;
   address: string;
+  addressFirstLine: string;
   city: string;
+  county: string;
   state: string;
   price: number;
   beds: number;
@@ -120,7 +122,9 @@ export class ListingsService {
       return {
         listingId: prop.Id || sf.ListingId || sf.ListingKey || '',
         address: sf.UnparsedAddress || 'Address unavailable',
+        addressFirstLine: sf.UnparsedFirstLineAddress || sf.UnparsedAddress || 'Address unavailable',
         city: sf.City || 'Unknown',
+        county: sf.CountyOrParish || sf.County || '',
         state: sf.StateOrProvince || '',
         price: sf.CurrentPrice || 0,
         beds: sf.BedsTotal || 0,
@@ -204,19 +208,23 @@ export class ListingsService {
     return `${base}/?${query.toString()}`;
   }
 
-  buildListingUrl(listing: ListingResult): string {
-    const slug = listing.address
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-');
-    const city = listing.city.toLowerCase().replace(/\s+/g, '-');
-    const state = listing.state.toLowerCase() || 'utah';
-    return `${this.apiUrl}/${state}/${city}/${slug}-${listing.listingId}`;
+  async buildListingUrl(listing: ListingResult): Promise<string> {
+    try {
+      const response = await fetch(`${this.apiUrl}/_api/property-search/property-url/${listing.listingId}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.url) return data.url;
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to get property URL from API: ${err.message}`);
+    }
+    // Fallback to search URL
+    return `${this.apiUrl}/?mode=search&city=${encodeURIComponent(listing.city)}`;
   }
 
   async shortenUrl(longUrl: string): Promise<string> {
     try {
-      const shortenerUrl = this.config.get<string>('URL_SHORTENER_URL') || 'https://gd3.io';
+      const shortenerUrl = this.config.get<string>('URL_SHORTENER_URL') || 'https://giddydigs.com';
       const response = await fetch(`${shortenerUrl}/api/short-url`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -231,6 +239,40 @@ export class ListingsService {
     } catch (err) {
       this.logger.warn(`URL shortener unavailable, using full URL: ${err.message}`);
       return longUrl;
+    }
+  }
+
+  /**
+   * Look up a property listing by sign code (keyword/number from yard signs).
+   * Calls the Giddy Digs API. Returns listing data or null if not found.
+   */
+  async lookupSignCode(code: string): Promise<{
+    listingId: string;
+    address: string;
+    city: string;
+    price: number;
+    beds: number;
+    baths: number;
+    sqft: number | null;
+    propertyType: string;
+    status: string;
+    description: string | null;
+    url: string;
+  } | null> {
+    try {
+      const response = await fetch(
+        `${this.apiUrl}/_api/sign-codes/${encodeURIComponent(code.trim())}`,
+      );
+      if (!response.ok) {
+        this.logger.warn(`Sign code lookup failed: ${response.status}`);
+        return null;
+      }
+      const data = await response.json();
+      if (!data.found || !data.listing) return null;
+      return data.listing;
+    } catch (err) {
+      this.logger.warn(`Sign code lookup error: ${err.message}`);
+      return null;
     }
   }
 }
