@@ -7,8 +7,12 @@ import { setupConversationRelayWebSocket } from './ai-voice/conversation-relay.h
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  const allowedOrigins = [
+    process.env.CLIENT_URL || 'http://localhost:3001',
+    process.env.GIDDYDIGS_URL || 'https://giddydigs.com',
+  ];
   app.enableCors({
-    origin: process.env.CLIENT_URL || 'http://localhost:3001',
+    origin: allowedOrigins,
     credentials: true,
   });
 
