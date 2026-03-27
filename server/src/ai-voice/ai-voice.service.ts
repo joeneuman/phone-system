@@ -4,7 +4,7 @@ import { TwilioService } from '../twilio/twilio.service';
 import { SettingsService } from '../settings/settings.service';
 import { CallsService } from '../calls/calls.service';
 import { ContactsService } from '../contacts/contacts.service';
-import { ListingsService, ListingResult, ListingSearchParams } from '../listings/listings.service';
+import { ListingsService, ListingResult, ListingSearchParams, UTAH_CITIES, UTAH_COUNTIES, UTAH_ZIP_CODES } from '../listings/listings.service';
 import { MessagesService } from '../messages/messages.service';
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -50,7 +50,7 @@ LOOPING (Active Listening):
 CAPABILITIES:
 - You can answer general questions about Giddy Digs and real estate.
 - You CAN search property listings! Use the search_listings tool when a caller asks about available properties, homes for sale, what's on the market, etc.
-- The St. George area includes nearby cities like Washington, Hurricane, Ivins, Santa Clara, and La Verkin. If results come from these cities, present them as being "in the St. George area" since that's what callers mean.
+- When searching, pick cities, counties, and zip codes from the provided enum lists. For broad area searches like "St. George area", use county: "Washington" to cover all cities in the metro area.
 - When presenting listing results, share them conversationally across multiple turns — mention one or two highlights at a time, not all at once. Use natural phrasing for prices and details.
 - You CAN send text messages to the caller! Use the send_text tool to text them links to property listings or search results.
 - After presenting search results, proactively offer to text the caller a link so they can browse the listings on their phone.
@@ -173,13 +173,24 @@ export class AiVoiceService implements OnModuleInit {
       {
         name: 'search_listings',
         description:
-          'Search available property listings. Use when the caller asks about homes for sale, available properties, or what is on the market. Extract search criteria from the conversation.',
+          'Search available property listings. Use when the caller asks about homes for sale, available properties, or what is on the market. Pick the city, county, or zip code from the enum lists. Use county for broad area searches (e.g. "Washington" county covers St. George, Washington, Hurricane, Ivins, Santa Clara, La Verkin, etc.).',
         input_schema: {
           type: 'object' as const,
           properties: {
             city: {
               type: 'string',
-              description: 'City to search in (e.g. "St George", "Washington", "Hurricane")',
+              enum: UTAH_CITIES,
+              description: 'Utah city to search in. Pick from this list.',
+            },
+            county: {
+              type: 'string',
+              enum: UTAH_COUNTIES,
+              description: 'Utah county to search in. Use for broader area searches. Washington county covers the St. George metro area.',
+            },
+            zipCode: {
+              type: 'string',
+              enum: UTAH_ZIP_CODES,
+              description: 'ZIP code to search in.',
             },
             minPrice: {
               type: 'number',

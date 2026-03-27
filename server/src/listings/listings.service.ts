@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 
 export interface ListingSearchParams {
   city?: string;
+  county?: string;
+  zipCode?: string;
   minPrice?: number;
   maxPrice?: number;
   minBeds?: number;
@@ -35,21 +37,108 @@ export interface ListingResult {
   hoaIncludes: string | null;
 }
 
-/** Normalize common city name variations so the API can match them. */
-function normalizeCity(city: string): string {
-  let normalized = city.trim();
-  // "St George" / "st george" → "St. George" (MLS convention)
-  normalized = normalized.replace(/\bSt\b(?!\.)/gi, 'St.');
-  return normalized;
-}
+/** All Utah cities — used as enum values for the search tool and for fuzzy matching. */
+export const UTAH_CITIES = [
+  'Alpine', 'Alta', 'Altamont', 'Amalga', 'American Fork', 'Annabella', 'Antimony', 'Apple Valley',
+  'Aurora', 'Ballard', 'Bear River City', 'Beaver', 'Bicknell', 'Big Water', 'Blanding', 'Bluffdale',
+  'Boulder', 'Bountiful', 'Brian Head', 'Brigham City', 'Bryce Canyon City',
+  'Cannonville', 'Castle Dale', 'Castle Valley', 'Cedar City', 'Cedar Fort', 'Cedar Hills',
+  'Centerfield', 'Centerville', 'Central Valley', 'Charleston', 'Circleville', 'Clarkston',
+  'Clawson', 'Clearfield', 'Cleveland', 'Clinton', 'Coalville', 'Corinne', 'Cornish',
+  'Cottonwood Heights', 'Daniel', 'Dayton', 'Delta', 'Deweyville', 'Draper', 'Duchesne',
+  'Dutch John', 'Eagle Mountain', 'East Carbon', 'Elk Ridge', 'Elmo', 'Elsinore', 'Elwood',
+  'Emery', 'Enoch', 'Enterprise', 'Ephraim', 'Erda', 'Escalante',
+  'Eureka', 'Fairfield', 'Fairview', 'Farmington', 'Farr West', 'Fayette', 'Ferron',
+  'Fielding', 'Fillmore', 'Fort Duchesne', 'Fountain Green', 'Francis', 'Fruit Heights', 'Garden City',
+  'Garland', 'Genola', 'Glendale', 'Glenwood', 'Goshen', 'Grantsville', 'Green River',
+  'Gunnison', 'Hanksville', 'Harrisville', 'Hatch', 'Heber City', 'Helper', 'Henefer',
+  'Henrieville', 'Herriman', 'Highland', 'Hildale', 'Hinckley', 'Holden', 'Holladay',
+  'Honeyville', 'Hooper', 'Howell', 'Huntington', 'Huntsville', 'Hurricane', 'Hyde Park',
+  'Hyrum', 'Independence', 'Ivins', 'Joseph', 'Junction', 'Kamas', 'Kanab', 'Kanosh',
+  'Kaysville', 'Kingston', 'Koosharem', 'La Verkin', 'Laketown', 'Layton', 'Leamington',
+  'Leeds', 'Lehi', 'Levan', 'Lewiston', 'Lindon', 'Loa', 'Logan', 'Lyman',
+  'Maeser', 'Manila', 'Manti', 'Mantua', 'Mapleton', 'Marriott-Slaterville', 'Marysvale',
+  'Mayfield', 'Meadow', 'Mendon', 'Midvale', 'Midway', 'Milford', 'Millcreek', 'Millville',
+  'Minersville', 'Moab', 'Mona', 'Monroe', 'Monticello', 'Morgan', 'Moroni', 'Mount Pleasant',
+  'Murray', 'Myton', 'Naples', 'Nephi', 'New Harmony', 'Newton', 'Nibley', 'North Logan',
+  'North Ogden', 'North Salt Lake', 'Oak City', 'Oakley', 'Ogden', 'Ophir', 'Orangeville',
+  'Orem', 'Panguitch', 'Paradise', 'Paragonah', 'Park City', 'Parowan', 'Payson', 'Perry',
+  'Pine Valley', 'Plain City', 'Pleasant Grove', 'Pleasant View', 'Plymouth', 'Portage',
+  'Price', 'Providence', 'Provo', 'Randolph', 'Redmond', 'Richfield', 'Richmond', 'River Heights',
+  'Riverdale', 'Riverton', 'Rockville', 'Rocky Ridge', 'Roosevelt', 'Roy',
+  'Rush Valley', 'Salem', 'Salina', 'Salt Lake City', 'Sandy', 'Santa Clara', 'Santaquin',
+  'Saratoga Springs', 'Scipio', 'Scofield', 'Sigurd', 'Smithfield', 'Snowville',
+  'South Jordan', 'South Ogden', 'South Salt Lake', 'South Weber', 'Spanish Fork',
+  'Spring City', 'Spring Glen', 'Springdale', 'Springfield', 'Springville',
+  'St. George', 'Stansbury Park', 'Sterling', 'Stockton', 'Sunnyside', 'Sunset', 'Syracuse',
+  'Tabiona', 'Taylorsville', 'Tooele', 'Torrey', 'Tremonton', 'Trenton', 'Tropic',
+  'Uintah', 'Vernal', 'Vernon', 'Vineyard', 'Virgin', 'Wales', 'Wallsburg',
+  'Washington', 'Washington Terrace', 'Wellington', 'Wellsville', 'Wendover', 'West Bountiful',
+  'West Haven', 'West Jordan', 'West Point', 'West Valley City', 'Willard', 'Woodland Hills',
+  'Woodruff', 'Woods Cross',
+];
 
-/**
- * Metro-area aliases: when a caller asks about a metro area name,
- * search the surrounding cities too so we don't miss results.
- */
-const METRO_ALIASES: Record<string, string[]> = {
-  'st. george': ['St. George', 'Washington', 'Hurricane', 'Ivins', 'Santa Clara', 'La Verkin'],
-};
+/** All Utah counties. */
+export const UTAH_COUNTIES = [
+  'Beaver', 'Box Elder', 'Cache', 'Carbon', 'Daggett', 'Davis', 'Duchesne', 'Emery',
+  'Garfield', 'Grand', 'Iron', 'Juab', 'Kane', 'Millard', 'Morgan', 'Piute', 'Rich',
+  'Salt Lake', 'San Juan', 'Sanpete', 'Sevier', 'Summit', 'Tooele', 'Uintah', 'Utah',
+  'Wasatch', 'Washington', 'Wayne', 'Weber',
+];
+
+/** Common Utah zip codes (southern Utah focus + major metro areas). */
+export const UTAH_ZIP_CODES = [
+  // St. George / Washington County
+  '84770', '84771', '84780', '84783', '84790', '84737', '84738', '84745', '84746',
+  '84765', '84767', '84779', '84782', '84784',
+  // Cedar City / Iron County
+  '84720', '84721',
+  // Hurricane / La Verkin
+  '84737',
+  // Kanab / Kane County
+  '84741',
+  // Salt Lake metro
+  '84101', '84102', '84103', '84104', '84105', '84106', '84107', '84108', '84109',
+  '84110', '84111', '84112', '84113', '84114', '84115', '84116', '84117', '84118',
+  '84119', '84120', '84121', '84123', '84124', '84128', '84129', '84130',
+  // Sandy / Draper / South Jordan
+  '84070', '84091', '84092', '84093', '84094', '84095', '84065',
+  // Provo / Orem / Utah County
+  '84601', '84602', '84603', '84604', '84605', '84606', '84058', '84057', '84059',
+  '84097', '84003', '84004', '84042', '84043', '84045', '84062', '84660',
+  // Park City / Summit County
+  '84060', '84068', '84098',
+  // Ogden / Weber County
+  '84401', '84402', '84403', '84404', '84405', '84414',
+  // Logan / Cache County
+  '84321', '84322', '84332', '84333', '84335', '84339',
+  // Moab
+  '84532',
+];
+
+/** Find the closest matching Utah city using simple similarity scoring. */
+function findClosestCity(input: string): string {
+  const lower = input.trim().toLowerCase()
+    .replace(/\bst\b(?!\.)/, 'st.'); // normalize "st" → "st."
+  let bestMatch = input;
+  let bestScore = 0;
+  for (const city of UTAH_CITIES) {
+    const cityLower = city.toLowerCase();
+    if (cityLower === lower) return city; // exact match
+    // Score: length of longest common prefix + bonus for similar length
+    let prefix = 0;
+    while (prefix < lower.length && prefix < cityLower.length && lower[prefix] === cityLower[prefix]) {
+      prefix++;
+    }
+    const lengthPenalty = Math.abs(lower.length - cityLower.length);
+    const score = prefix * 2 - lengthPenalty;
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = city;
+    }
+  }
+  return bestMatch;
+}
 
 function mapPropertyToListing(prop: any): ListingResult {
   const sf = prop.StandardFields || {};
@@ -94,7 +183,14 @@ export class ListingsService {
     const searchData: Record<string, any> = {};
 
     if (params.city) {
-      searchData.city = normalizeCity(params.city);
+      searchData.city = findClosestCity(params.city);
+      this.logger.log(`City "${params.city}" → "${searchData.city}"`);
+    }
+    if (params.county) {
+      searchData.county = params.county;
+    }
+    if (params.zipCode) {
+      searchData.postalCode = params.zipCode;
     }
     if (params.minPrice != null) {
       searchData.minPrice = params.minPrice;
@@ -162,38 +258,6 @@ export class ListingsService {
 
     const listings = properties.map(mapPropertyToListing);
 
-    // If no results and the city is a metro area name, retry with broader area
-    if (listings.length === 0 && params.city) {
-      const normalized = normalizeCity(params.city).toLowerCase();
-      const metroCities = METRO_ALIASES[normalized];
-      if (metroCities) {
-        this.logger.log(`No results for "${params.city}", expanding to metro area: ${metroCities.join(', ')}`);
-        const broadSearchData = { ...searchData };
-        delete broadSearchData.city;
-        const broadBody = { searchData: broadSearchData, page: 1, pageLimit: 10 };
-        const broadResp = await fetch(`${this.apiUrl}/_api/property-search`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(broadBody),
-        });
-        if (broadResp.ok) {
-          const broadData = await broadResp.json();
-          const broadProps: any[] = broadData.properties || [];
-          const metroCitiesLower = metroCities.map(c => c.toLowerCase());
-          const metroProps = broadProps.filter(p => {
-            const city = (p.StandardFields?.City || '').toLowerCase();
-            return metroCitiesLower.includes(city);
-          });
-          if (metroProps.length > 0) {
-            const metroListings = metroProps.map(mapPropertyToListing);
-            const metroTotal = broadData.totalQuantity ?? metroListings.length;
-            this.logger.log(`Metro area search found ${metroListings.length} listings`);
-            return { listings: metroListings, totalCount: metroTotal };
-          }
-        }
-      }
-    }
-
     return { listings, totalCount };
   }
 
@@ -208,6 +272,8 @@ export class ListingsService {
     if (results.length === 0) {
       const parts: string[] = [];
       if (params.city) parts.push(`in ${params.city}`);
+      if (params.county) parts.push(`in ${params.county} County`);
+      if (params.zipCode) parts.push(`in zip code ${params.zipCode}`);
       if (params.minBeds)
         parts.push(`with at least ${params.minBeds} bedrooms`);
       if (params.minBaths)
