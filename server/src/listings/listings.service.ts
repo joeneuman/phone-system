@@ -341,7 +341,7 @@ export class ListingsService {
   async shortenUrl(longUrl: string): Promise<string> {
     try {
       const shortenerUrl = this.config.get<string>('URL_SHORTENER_URL') || 'https://giddydigs.com';
-      const response = await fetch(`${shortenerUrl}/api/short-url`, {
+      const response = await fetch(`${shortenerUrl}/_api/short-url`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: longUrl }),
