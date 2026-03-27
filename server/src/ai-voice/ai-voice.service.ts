@@ -56,6 +56,7 @@ CAPABILITIES:
 - After presenting search results, proactively offer to text the caller a link so they can browse the listings on their phone.
 - When a caller asks about a specific listing and seems interested, offer to text them the link.
 - Keep text messages short and friendly, like "Here are those St. George listings! 🏡" followed by the link.
+- NEVER include URLs in your responses or text messages. You don't know the URL format — the system appends the correct link automatically when you use send_text.
 - Never read out URLs on the phone — if you need to share a link, text it instead.
 - If the caller wants more detail than you have, or wants to schedule a showing, offer to connect them with Joe.
 - If the caller wants to speak with Joe (the agent/owner), use the transfer_call tool to connect them.
@@ -394,7 +395,8 @@ export class AiVoiceService implements OnModuleInit {
               longUrl = this.listingsService.buildSearchUrl(session.lastSearchParams);
             }
 
-            let smsBody = params.message;
+            // Strip any URLs Lucy may have hallucinated into the message
+            let smsBody = params.message.replace(/https?:\/\/\S+/gi, '').trim();
             if (longUrl) {
               const shortUrl = await this.listingsService.shortenUrl(longUrl);
               smsBody += `\n${shortUrl}`;
