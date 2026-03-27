@@ -391,6 +391,9 @@ export class AiVoiceService implements OnModuleInit {
               }
             } else if (params.sendSearchResults && session.lastSearchParams) {
               longUrl = this.listingsService.buildSearchUrl(session.lastSearchParams);
+            } else if (session.lastSearchResults.length === 1) {
+              // Only one listing — link to it directly
+              longUrl = await this.listingsService.buildListingUrl(session.lastSearchResults[0]);
             } else if (session.lastSearchParams) {
               longUrl = this.listingsService.buildSearchUrl(session.lastSearchParams);
             }
