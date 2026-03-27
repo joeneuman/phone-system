@@ -380,7 +380,7 @@ export class AiVoiceService implements OnModuleInit {
           }
         } else if (block.name === 'send_text') {
           const params = block.input as any;
-          console.log(`Sending text to ${session.from}:`, params);
+          console.log(`[send_text] Raw params:`, JSON.stringify(params));
           try {
             let longUrl = '';
             if (params.listingIndex && session.lastSearchResults.length > 0) {
@@ -392,17 +392,25 @@ export class AiVoiceService implements OnModuleInit {
             } else if (params.sendSearchResults && session.lastSearchParams) {
               longUrl = this.listingsService.buildSearchUrl(session.lastSearchParams);
             } else if (session.lastSearchResults.length === 1) {
-              // Only one listing — link to it directly
               longUrl = await this.listingsService.buildListingUrl(session.lastSearchResults[0]);
             } else if (session.lastSearchParams) {
               longUrl = this.listingsService.buildSearchUrl(session.lastSearchParams);
             }
 
-            // Strip any URLs Lucy may have hallucinated into the message
-            let smsBody = params.message.replace(/https?:\/\/\S+/gi, '').trim();
+            // Always strip URLs — the model hallucinates them despite instructions
+            const rawMessage = params.message;
+            let smsBody = rawMessage.replace(/https?:\/\/\S+/gi, '').replace(/gd3\.io\S*/gi, '').trim();
+            if (rawMessage !== smsBody) {
+              console.log(`[send_text] Stripped hallucinated URL from message`);
+              console.log(`[send_text]   Before: ${rawMessage}`);
+              console.log(`[send_text]   After:  ${smsBody}`);
+            }
             if (longUrl) {
               const shortUrl = await this.listingsService.shortenUrl(longUrl);
+              console.log(`[send_text] Appending real URL: ${longUrl} → ${shortUrl}`);
               smsBody += `\n${shortUrl}`;
+            } else {
+              console.log(`[send_text] WARNING: No URL to append (no listingIndex, no search params)`);
             }
 
             const twilioMsg = await this.twilioService.sendSms(session.from, smsBody);
