@@ -35,6 +35,49 @@ export interface ListingResult {
   hoaIncludes: string | null;
 }
 
+/** Normalize common city name variations so the API can match them. */
+function normalizeCity(city: string): string {
+  let normalized = city.trim();
+  // "St George" / "st george" → "St. George" (MLS convention)
+  normalized = normalized.replace(/\bSt\b(?!\.)/gi, 'St.');
+  return normalized;
+}
+
+/**
+ * Metro-area aliases: when a caller asks about a metro area name,
+ * search the surrounding cities too so we don't miss results.
+ */
+const METRO_ALIASES: Record<string, string[]> = {
+  'st. george': ['St. George', 'Washington', 'Hurricane', 'Ivins', 'Santa Clara', 'La Verkin'],
+};
+
+function mapPropertyToListing(prop: any): ListingResult {
+  const sf = prop.StandardFields || {};
+  return {
+    listingId: prop.Id || sf.ListingId || sf.ListingKey || '',
+    address: sf.UnparsedAddress || 'Address unavailable',
+    addressFirstLine: sf.UnparsedFirstLineAddress || sf.UnparsedAddress || 'Address unavailable',
+    city: sf.City || 'Unknown',
+    county: sf.CountyOrParish || sf.County || '',
+    state: sf.StateOrProvince || '',
+    price: sf.CurrentPrice || 0,
+    beds: sf.BedsTotal || 0,
+    baths: sf.BathsTotal || 0,
+    sqft: sf.LivingArea || null,
+    yearBuilt: sf.YearBuilt || null,
+    propertyType: sf.PropertyTypeLabel || 'Residential',
+    status: sf.MlsStatus || 'Active',
+    listAgent: sf.ListAgentName || null,
+    description: sf.PublicRemarks || null,
+    lotSize: sf.LotSizeArea || sf.LotSizeAcres ? `${sf.LotSizeArea || sf.LotSizeAcres}` : null,
+    garageSpaces: sf.GarageSpaces || null,
+    stories: sf.Stories || null,
+    daysOnMarket: sf.DaysOnMarket || null,
+    hoaFee: sf.AssociationFee ? `$${sf.AssociationFee} ${sf.AssociationFeeFrequency || ''}`.trim() : null,
+    hoaIncludes: sf.AssociationFeeIncludes || null,
+  };
+}
+
 @Injectable()
 export class ListingsService {
   private readonly logger = new Logger(ListingsService.name);
@@ -51,7 +94,7 @@ export class ListingsService {
     const searchData: Record<string, any> = {};
 
     if (params.city) {
-      searchData.city = params.city;
+      searchData.city = normalizeCity(params.city);
     }
     if (params.minPrice != null) {
       searchData.minPrice = params.minPrice;
@@ -117,32 +160,39 @@ export class ListingsService {
       `API returned ${properties.length} of ${totalCount} total`,
     );
 
-    const listings = properties.map((prop) => {
-      const sf = prop.StandardFields || {};
-      return {
-        listingId: prop.Id || sf.ListingId || sf.ListingKey || '',
-        address: sf.UnparsedAddress || 'Address unavailable',
-        addressFirstLine: sf.UnparsedFirstLineAddress || sf.UnparsedAddress || 'Address unavailable',
-        city: sf.City || 'Unknown',
-        county: sf.CountyOrParish || sf.County || '',
-        state: sf.StateOrProvince || '',
-        price: sf.CurrentPrice || 0,
-        beds: sf.BedsTotal || 0,
-        baths: sf.BathsTotal || 0,
-        sqft: sf.LivingArea || null,
-        yearBuilt: sf.YearBuilt || null,
-        propertyType: sf.PropertyTypeLabel || 'Residential',
-        status: sf.MlsStatus || 'Active',
-        listAgent: sf.ListAgentName || null,
-        description: sf.PublicRemarks || null,
-        lotSize: sf.LotSizeArea || sf.LotSizeAcres ? `${sf.LotSizeArea || sf.LotSizeAcres}` : null,
-        garageSpaces: sf.GarageSpaces || null,
-        stories: sf.Stories || null,
-        daysOnMarket: sf.DaysOnMarket || null,
-        hoaFee: sf.AssociationFee ? `$${sf.AssociationFee} ${sf.AssociationFeeFrequency || ''}`.trim() : null,
-        hoaIncludes: sf.AssociationFeeIncludes || null,
-      };
-    });
+    const listings = properties.map(mapPropertyToListing);
+
+    // If no results and the city is a metro area name, retry with broader area
+    if (listings.length === 0 && params.city) {
+      const normalized = normalizeCity(params.city).toLowerCase();
+      const metroCities = METRO_ALIASES[normalized];
+      if (metroCities) {
+        this.logger.log(`No results for "${params.city}", expanding to metro area: ${metroCities.join(', ')}`);
+        const broadSearchData = { ...searchData };
+        delete broadSearchData.city;
+        const broadBody = { searchData: broadSearchData, page: 1, pageLimit: 10 };
+        const broadResp = await fetch(`${this.apiUrl}/_api/property-search`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(broadBody),
+        });
+        if (broadResp.ok) {
+          const broadData = await broadResp.json();
+          const broadProps: any[] = broadData.properties || [];
+          const metroCitiesLower = metroCities.map(c => c.toLowerCase());
+          const metroProps = broadProps.filter(p => {
+            const city = (p.StandardFields?.City || '').toLowerCase();
+            return metroCitiesLower.includes(city);
+          });
+          if (metroProps.length > 0) {
+            const metroListings = metroProps.map(mapPropertyToListing);
+            const metroTotal = broadData.totalQuantity ?? metroListings.length;
+            this.logger.log(`Metro area search found ${metroListings.length} listings`);
+            return { listings: metroListings, totalCount: metroTotal };
+          }
+        }
+      }
+    }
 
     return { listings, totalCount };
   }

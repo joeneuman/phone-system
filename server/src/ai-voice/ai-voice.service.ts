@@ -50,6 +50,7 @@ LOOPING (Active Listening):
 CAPABILITIES:
 - You can answer general questions about Giddy Digs and real estate.
 - You CAN search property listings! Use the search_listings tool when a caller asks about available properties, homes for sale, what's on the market, etc.
+- The St. George area includes nearby cities like Washington, Hurricane, Ivins, Santa Clara, and La Verkin. If results come from these cities, present them as being "in the St. George area" since that's what callers mean.
 - When presenting listing results, share them conversationally across multiple turns — mention one or two highlights at a time, not all at once. Use natural phrasing for prices and details.
 - You CAN send text messages to the caller! Use the send_text tool to text them links to property listings or search results.
 - After presenting search results, proactively offer to text the caller a link so they can browse the listings on their phone.
@@ -374,7 +375,7 @@ export class AiVoiceService implements OnModuleInit {
               const idx = params.listingIndex - 1;
               const listing = session.lastSearchResults[idx];
               if (listing) {
-                longUrl = this.listingsService.buildListingUrl(listing);
+                longUrl = await this.listingsService.buildListingUrl(listing);
               }
             } else if (params.sendSearchResults && session.lastSearchParams) {
               longUrl = this.listingsService.buildSearchUrl(session.lastSearchParams);
