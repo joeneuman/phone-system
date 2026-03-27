@@ -398,13 +398,15 @@ export class AiVoiceService implements OnModuleInit {
             }
 
             // Always strip URLs — the model hallucinates them despite instructions
-            const rawMessage = params.message;
-            let smsBody = rawMessage.replace(/https?:\/\/\S+/gi, '').replace(/gd3\.io\S*/gi, '').trim();
-            if (rawMessage !== smsBody) {
-              console.log(`[send_text] Stripped hallucinated URL from message`);
-              console.log(`[send_text]   Before: ${rawMessage}`);
-              console.log(`[send_text]   After:  ${smsBody}`);
-            }
+            const rawMessage = String(params.message || '');
+            let smsBody = rawMessage
+              .replace(/https?:\/\/\S+/gi, '')   // full URLs
+              .replace(/gd3\.io\S*/gi, '')        // bare gd3.io links
+              .replace(/giddydigs\.com\S*/gi, '') // bare giddydigs.com links
+              .replace(/\n{2,}/g, '\n')           // collapse blank lines
+              .trim();
+            console.log(`[send_text] Message before strip: ${JSON.stringify(rawMessage)}`);
+            console.log(`[send_text] Message after strip:  ${JSON.stringify(smsBody)}`);
             if (longUrl) {
               const shortUrl = await this.listingsService.shortenUrl(longUrl);
               console.log(`[send_text] Appending real URL: ${longUrl} → ${shortUrl}`);
