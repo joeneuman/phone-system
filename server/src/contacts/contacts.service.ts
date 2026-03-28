@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Contact } from './schemas/contact.schema';
-import { CreateContactDto, UpdateContactDto } from './dto/create-contact.dto';
+import { CreateContactDto, UpdateContactDto, SyncContactDto } from './dto/create-contact.dto';
 
 @Injectable()
 export class ContactsService {
@@ -52,5 +52,55 @@ export class ContactsService {
       return [contact.firstName, contact.lastName].filter(Boolean).join(' ');
     }
     return phoneNumber;
+  }
+
+  async bulkSync(contacts: SyncContactDto[]): Promise<{ created: number; updated: number; skipped: number }> {
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    for (const dto of contacts) {
+      try {
+        if (!dto.phoneNumber || !dto.metadata?.source) {
+          skipped++;
+          continue;
+        }
+
+        const existing = await this.findByPhone(dto.phoneNumber);
+
+        if (existing) {
+          // Only update contacts that were created by the sync (protect manual contacts)
+          if (existing.metadata?.source === 'giddydigs') {
+            await this.contactModel.updateOne(
+              { _id: existing._id },
+              {
+                $set: {
+                  firstName: dto.firstName || existing.firstName,
+                  lastName: dto.lastName || existing.lastName,
+                  company: dto.company || existing.company,
+                  email: dto.email || existing.email,
+                  notes: dto.notes || existing.notes,
+                  metadata: { ...dto.metadata, lastSyncedAt: new Date() },
+                },
+              },
+            );
+            updated++;
+          } else {
+            skipped++; // Manual contact — don't overwrite
+          }
+        } else {
+          await this.contactModel.create({
+            ...dto,
+            metadata: { ...dto.metadata, lastSyncedAt: new Date() },
+          });
+          created++;
+        }
+      } catch (err) {
+        // Skip individual failures (e.g., validation errors)
+        skipped++;
+      }
+    }
+
+    return { created, updated, skipped };
   }
 }

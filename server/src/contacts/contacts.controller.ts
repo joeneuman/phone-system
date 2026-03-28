@@ -1,6 +1,6 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, Query, HttpCode, HttpStatus } from '@nestjs/common';
 import { ContactsService } from './contacts.service';
-import { CreateContactDto, UpdateContactDto } from './dto/create-contact.dto';
+import { CreateContactDto, UpdateContactDto, BulkSyncDto } from './dto/create-contact.dto';
 
 @Controller('contacts')
 export class ContactsController {
@@ -19,6 +19,12 @@ export class ContactsController {
   @Get('phone/:phoneNumber')
   findByPhone(@Param('phoneNumber') phoneNumber: string) {
     return this.contactsService.findByPhone(phoneNumber);
+  }
+
+  @Post('sync')
+  @HttpCode(HttpStatus.OK)
+  bulkSync(@Body() dto: BulkSyncDto) {
+    return this.contactsService.bulkSync(dto.contacts);
   }
 
   @Post()

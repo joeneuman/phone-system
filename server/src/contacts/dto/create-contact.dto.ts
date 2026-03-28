@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsBoolean, Matches } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsArray, IsObject, Matches, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateContactDto {
   @IsString()
@@ -22,6 +23,37 @@ export class CreateContactDto {
 
   @IsBoolean() @IsOptional()
   favorite?: boolean;
+}
+
+export class SyncContactDto {
+  @IsString()
+  @Matches(/^\+?[1-9]\d{1,14}$/, { message: 'Phone number must be in E.164 format' })
+  phoneNumber: string;
+
+  @IsString() @IsOptional()
+  firstName?: string;
+
+  @IsString() @IsOptional()
+  lastName?: string;
+
+  @IsString() @IsOptional()
+  company?: string;
+
+  @IsString() @IsOptional()
+  email?: string;
+
+  @IsString() @IsOptional()
+  notes?: string;
+
+  @IsObject() @IsOptional()
+  metadata?: Record<string, any>;
+}
+
+export class BulkSyncDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SyncContactDto)
+  contacts: SyncContactDto[];
 }
 
 export class UpdateContactDto {
