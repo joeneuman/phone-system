@@ -79,11 +79,34 @@ export class TwilioWebhookController {
     const hasAiKey = !!this.config.get<string>('ANTHROPIC_API_KEY');
 
     if (hasAiKey) {
+      // Look up caller contact for personalized greeting
+      let callerName = '';
+      let callerFirstName = '';
+      let callerNotes = '';
+      try {
+        const contact = await this.contactsService.findByPhone(from);
+        if (contact?.firstName) {
+          callerFirstName = contact.firstName;
+          callerName = [contact.firstName, contact.lastName].filter(Boolean).join(' ');
+          callerNotes = contact.notes || '';
+        }
+      } catch (e) {
+        console.error('Contact lookup failed, using default greeting:', e.message);
+      }
+
+      const greeting = callerFirstName
+        ? `GIDDY DIGS! Hey ${callerFirstName}, this is Lucy, how can I help you?`
+        : "GIDDY DIGS! This is Lucy, how can I help you?";
+
       // Route to AI attendant via ConversationRelay
       const connect = twiml.connect();
       const wsUrl = publicUrl.replace(/^https?:\/\//, 'wss://') + '/ws/conversation-relay';
+      const wsParams = new URLSearchParams({ callerNumber: from });
+      if (callerName) wsParams.set('callerName', callerName);
+      if (callerNotes) wsParams.set('callerNotes', callerNotes);
+
       connect.conversationRelay({
-        url: `${wsUrl}?callerNumber=${encodeURIComponent(from)}`,
+        url: `${wsUrl}?${wsParams.toString()}`,
         ttsProvider: 'ElevenLabs',
         voice: 'XrExE9yKIg1WjnnlVkGX-0.9_0.4_0.75',
         elevenlabsTextNormalization: 'on',
@@ -91,7 +114,7 @@ export class TwilioWebhookController {
         language: 'en-US',
         interruptible: 'true',
         interruptSensitivity: 'medium',
-        welcomeGreeting: "GIDDY DIGS! This is Lucy, how can I help you?",
+        welcomeGreeting: greeting,
       });
     } else {
       // Fallback: no AI key — use direct routing

@@ -56,8 +56,10 @@ CAPABILITIES:
 - After presenting search results, proactively offer to text the caller a link so they can browse the listings on their phone.
 - When a caller asks about a specific listing and seems interested, offer to text them the link.
 - Keep text messages short and friendly, like "Here are those St. George listings! 🏡" followed by the link.
-- NEVER include URLs in your responses or text messages. You don't know the URL format — the system appends the correct link automatically when you use send_text.
-- Never read out URLs on the phone — if you need to share a link, text it instead.
+- ABSOLUTELY NEVER say, spell out, or include any URL, web address, or link in your spoken responses. You do NOT know any URLs — not for giddydigs.com, not for gd3.io, not for any listing page. Any URL you generate will be WRONG and will embarrass you.
+- When you want to share a link, use the send_text tool. The system automatically appends the correct URL — you never need to know or say it.
+- If asked "what's the website?" just say "giddydigs dot com" — never spell out a full URL path or page.
+- Never say things like "you can find it at..." followed by any URL. Instead say "I'll text you the link" and use send_text.
 - If the caller wants more detail than you have, or wants to schedule a showing, offer to connect them with Joe.
 - If the caller wants to speak with Joe (the agent/owner), use the transfer_call tool to connect them.
 - Be warm, helpful, and professional.
@@ -69,17 +71,25 @@ TRANSFERRING CALLS:
 - ALWAYS tell the caller you are transferring them BEFORE using the transfer_call tool. Say something like "Let me connect you with Joe, one moment." Your spoken response must come first, then the tool call.
 - Do not silently transfer — always announce it first.`;
 
-/** Strip markdown emphasis markers that TTS would read aloud */
+/** Strip markdown emphasis markers and hallucinated URLs that TTS would read aloud */
 function stripMarkdown(text: string): string {
   return text
     .replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1')
-    .replace(/_{1,2}([^_]+)_{1,2}/g, '$1');
+    .replace(/_{1,2}([^_]+)_{1,2}/g, '$1')
+    // Strip hallucinated URLs — Claude sometimes invents links despite instructions
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/gd3\.io\S*/gi, '')
+    .replace(/giddydigs\.com\/\S*/gi, '')  // paths only — preserve bare domain mention
+    .replace(/\s{2,}/g, ' ')              // collapse double spaces left by removals
+    .trim();
 }
 
 interface CallSession {
   callSid: string;
   streamSid: string;
   from: string;
+  callerName: string;
+  callerNotes: string;
   messages: Array<{ role: 'user' | 'assistant'; content: any }>;
   abortController: AbortController | null;
   isPlaying: boolean;
@@ -112,11 +122,13 @@ export class AiVoiceService implements OnModuleInit {
     }
   }
 
-  createSession(callSid: string, streamSid: string, from: string): CallSession {
+  createSession(callSid: string, streamSid: string, from: string, callerName = '', callerNotes = ''): CallSession {
     const session: CallSession = {
       callSid,
       streamSid,
       from,
+      callerName,
+      callerNotes,
       messages: [],
       abortController: null,
       isPlaying: false,
@@ -290,11 +302,22 @@ export class AiVoiceService implements OnModuleInit {
   ): AsyncGenerator<
     { type: 'text'; token: string; last: boolean } | { type: 'transfer'; reason: string }
   > {
+    // Build caller context for the system prompt
+    let callerContext = '';
+    if (session.callerName) {
+      callerContext = `\n\nCALLER INFO:\nThe caller is ${session.callerName}. Use their first name naturally in conversation — don't overdo it, just be personal.`;
+      if (session.callerNotes) {
+        callerContext += `\nNotes: ${session.callerNotes}`;
+      }
+    } else {
+      callerContext = '\n\nCALLER INFO:\nThe caller is unknown. Do not guess their name.';
+    }
+
     const stream = this.anthropic.messages.stream(
       {
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 300,
-        system: SYSTEM_PROMPT,
+        system: SYSTEM_PROMPT + callerContext,
         messages: session.messages,
         tools: this.getTools(),
       },

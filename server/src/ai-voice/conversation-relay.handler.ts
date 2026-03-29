@@ -30,6 +30,8 @@ export function setupConversationRelayWebSocket(
     // Extract caller number from query string (passed from webhook controller)
     const url = new URL(request.url, 'http://localhost');
     const callerNumberFromQuery = url.searchParams.get('callerNumber') || '';
+    const callerNameFromQuery = url.searchParams.get('callerName') || '';
+    const callerNotesFromQuery = url.searchParams.get('callerNotes') || '';
 
     let callSid = '';
 
@@ -47,8 +49,8 @@ export function setupConversationRelayWebSocket(
           callSid = msg.callSid || '';
           const streamSid = msg.streamSid || '';
           const from = callerNumberFromQuery || msg.from || '';
-          aiVoiceService.createSession(callSid, streamSid, from);
-          console.log(`AI session started for call ${callSid} from ${from}`);
+          aiVoiceService.createSession(callSid, streamSid, from, callerNameFromQuery, callerNotesFromQuery);
+          console.log(`AI session started for call ${callSid} from ${from}${callerNameFromQuery ? ` (${callerNameFromQuery})` : ''}`);
           break;
         }
 
