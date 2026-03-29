@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { api } from '../services/api';
 
 function getInitials(contact) {
   if (contact.firstName) {
@@ -16,8 +17,103 @@ function getDisplayName(contact) {
   return contact.phoneNumber;
 }
 
+function DedupReviewPanel({ reviews, onResolved }) {
+  const [resolving, setResolving] = useState(null);
+
+  const handleResolve = async (reviewId, action, keepContactId) => {
+    setResolving(reviewId);
+    try {
+      await api.resolveDedup(reviewId, action, keepContactId);
+      onResolved();
+    } catch (e) {
+      console.error('Failed to resolve dedup:', e);
+    }
+    setResolving(null);
+  };
+
+  return (
+    <div style={{ padding: '12px', borderBottom: '1px solid var(--border)' }}>
+      {reviews.map((r) => (
+        <div key={r.reviewId} style={{
+          background: 'var(--bg-tertiary)',
+          borderRadius: 'var(--radius-sm)',
+          padding: '10px',
+          marginBottom: '8px',
+        }}>
+          <div style={{ fontSize: '11px', color: 'var(--orange)', marginBottom: '6px' }}>
+            {r.reason === 'same-phone-different-source'
+              ? 'Same phone number, different sources'
+              : 'Same name, different phone numbers'}
+          </div>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+            {[r.contactA, r.contactB].map((c) => (
+              <div key={c._id} style={{
+                flex: 1,
+                background: 'var(--bg-secondary)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '8px',
+                fontSize: '12px',
+              }}>
+                <div style={{ fontWeight: 600 }}>{getDisplayName(c)}</div>
+                <div style={{ color: 'var(--text-secondary)' }}>{c.phoneNumber}</div>
+                {c.company && <div style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{c.company}</div>}
+                {c.metadata?.source && (
+                  <div style={{ color: 'var(--text-muted)', fontSize: '10px', marginTop: '4px' }}>
+                    Source: {c.metadata.source}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button
+              className="btn"
+              disabled={resolving === r.reviewId}
+              onClick={() => handleResolve(r.reviewId, 'merge', r.contactA._id)}
+              style={{ fontSize: '11px', padding: '4px 8px', flex: 1 }}
+            >
+              Keep {r.contactA.firstName || 'A'}
+            </button>
+            <button
+              className="btn"
+              disabled={resolving === r.reviewId}
+              onClick={() => handleResolve(r.reviewId, 'merge', r.contactB._id)}
+              style={{ fontSize: '11px', padding: '4px 8px', flex: 1 }}
+            >
+              Keep {r.contactB.firstName || 'B'}
+            </button>
+            <button
+              className="btn"
+              disabled={resolving === r.reviewId}
+              onClick={() => handleResolve(r.reviewId, 'dismiss')}
+              style={{ fontSize: '11px', padding: '4px 8px', color: 'var(--text-muted)' }}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ContactsList({ contacts, onSearch, onSelect, onNew, onCall, onText }) {
   const [search, setSearch] = useState('');
+  const [dedupReviews, setDedupReviews] = useState([]);
+  const [showDedup, setShowDedup] = useState(false);
+
+  useEffect(() => {
+    loadDedupReviews();
+  }, []);
+
+  const loadDedupReviews = async () => {
+    try {
+      const data = await api.getDedupPending();
+      setDedupReviews(Array.isArray(data) ? data : []);
+    } catch (e) {
+      // Dedup endpoint might not exist yet on older deploys
+    }
+  };
 
   const handleSearch = (val) => {
     setSearch(val);
@@ -30,6 +126,28 @@ export function ContactsList({ contacts, onSearch, onSelect, onNew, onCall, onTe
         <h2>Contacts</h2>
         <button className="btn btn-primary" onClick={onNew}>+ Add</button>
       </div>
+      {dedupReviews.length > 0 && (
+        <div
+          onClick={() => setShowDedup(!showDedup)}
+          style={{
+            padding: '8px 16px',
+            background: 'var(--red-dim)',
+            color: 'var(--orange)',
+            cursor: 'pointer',
+            fontSize: '13px',
+            fontWeight: 500,
+            textAlign: 'center',
+          }}
+        >
+          ⚠️ {dedupReviews.length} possible duplicate{dedupReviews.length !== 1 ? 's' : ''} found — {showDedup ? 'Hide' : 'Review'}
+        </div>
+      )}
+      {showDedup && dedupReviews.length > 0 && (
+        <DedupReviewPanel
+          reviews={dedupReviews}
+          onResolved={() => { loadDedupReviews(); onSearch(search || undefined); }}
+        />
+      )}
       <div className="search-bar">
         <input
           className="input"

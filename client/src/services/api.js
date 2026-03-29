@@ -44,6 +44,13 @@ export const api = {
   updateContact: (id, data) =>
     request(`/contacts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteContact: (id) => request(`/contacts/${id}`, { method: 'DELETE' }),
+  getDedupPending: () => request('/contacts/dedup/pending'),
+  runDedup: () => request('/contacts/dedup/run', { method: 'POST' }),
+  resolveDedup: (reviewId, action, keepContactId) =>
+    request('/contacts/dedup/resolve', {
+      method: 'POST',
+      body: JSON.stringify({ reviewId, action, keepContactId }),
+    }),
 
   // Messages
   getConversations: () => request('/messages/conversations'),

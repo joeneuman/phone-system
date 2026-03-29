@@ -31,3 +31,4 @@ export class Contact extends Document {
 export const ContactSchema = SchemaFactory.createForClass(Contact);
 ContactSchema.index({ phoneNumber: 1 }, { unique: true });
 ContactSchema.index({ firstName: 'text', lastName: 'text', company: 'text' });
+ContactSchema.index({ 'metadata.giddydigsUserId': 1 }, { sparse: true });
