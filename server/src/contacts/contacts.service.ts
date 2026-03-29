@@ -294,12 +294,29 @@ export class ContactsService implements OnModuleInit {
 
       if (!toKeep) return { ok: false, message: 'Contact to keep not found' };
 
-      // Merge favorite flag from deleted contact
-      if (toDelete?.favorite && !toKeep.favorite) {
-        await this.contactModel.updateOne({ _id: toKeep._id }, { $set: { favorite: true } });
-      }
-
       if (toDelete) {
+        // Merge: fill in any blank fields on the keeper from the contact being deleted
+        const mergeFields: Record<string, any> = {};
+        const fields = ['firstName', 'lastName', 'company', 'email', 'notes'] as const;
+        for (const field of fields) {
+          if (!toKeep[field] && toDelete[field]) {
+            mergeFields[field] = toDelete[field];
+          }
+        }
+        // Merge favorite flag
+        if (toDelete.favorite && !toKeep.favorite) {
+          mergeFields.favorite = true;
+        }
+        // Merge metadata (keep keeper's values, fill in missing keys from deleted)
+        if (toDelete.metadata && Object.keys(toDelete.metadata).length > 0) {
+          const mergedMetadata = { ...toDelete.metadata, ...toKeep.metadata };
+          mergeFields.metadata = mergedMetadata;
+        }
+
+        if (Object.keys(mergeFields).length > 0) {
+          await this.contactModel.updateOne({ _id: toKeep._id }, { $set: mergeFields });
+        }
+
         await this.contactModel.deleteOne({ _id: toDelete._id });
       }
 
