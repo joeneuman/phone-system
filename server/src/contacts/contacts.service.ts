@@ -69,8 +69,9 @@ export class ContactsService {
         const existing = await this.findByPhone(dto.phoneNumber);
 
         if (existing) {
-          // Only update contacts that were created by the sync (protect manual contacts)
-          if (existing.metadata?.source === 'giddydigs') {
+          // Update if: previously synced from giddydigs, OR is a placeholder (no name, no source)
+          const isPlaceholder = !existing.firstName && !existing.metadata?.source;
+          if (existing.metadata?.source === 'giddydigs' || isPlaceholder) {
             await this.contactModel.updateOne(
               { _id: existing._id },
               {
@@ -86,7 +87,7 @@ export class ContactsService {
             );
             updated++;
           } else {
-            skipped++; // Manual contact — don't overwrite
+            skipped++; // Manual contact with real data — don't overwrite
           }
         } else {
           await this.contactModel.create({
@@ -96,7 +97,7 @@ export class ContactsService {
           created++;
         }
       } catch (err) {
-        // Skip individual failures (e.g., validation errors)
+        console.error(`Contact sync failed for ${dto.phoneNumber}:`, err?.message || err);
         skipped++;
       }
     }
