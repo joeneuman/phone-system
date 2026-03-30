@@ -40,8 +40,10 @@ export function Dialpad({ onCall, error }) {
     if (e.key === 'Enter' && number.trim()) {
       handleCall();
     } else if (e.key === 'Backspace') {
+      e.preventDefault();
       handleBackspace();
     } else if (/^[\d*#]$/.test(e.key)) {
+      e.preventDefault();
       handleKey(e.key);
     }
   }, [number, handleCall, handleBackspace, handleKey]);
