@@ -53,6 +53,13 @@ export const api = {
     }),
 
   // Messages
+  uploadMedia: async (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${API}/messages/upload`, { method: 'POST', body: form });
+    if (!res.ok) throw new Error(`Upload error: ${res.status}`);
+    return res.json();
+  },
   getConversations: () => request('/messages/conversations'),
   getMessages: (conversationId, limit, before) => {
     const params = new URLSearchParams();

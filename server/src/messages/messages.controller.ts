@@ -1,4 +1,9 @@
-import { Controller, Get, Post, Param, Body, Query } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { randomUUID } from 'crypto';
+import { extname } from 'path';
+import { ConfigService } from '@nestjs/config';
 import { MessagesService } from './messages.service';
 import { TwilioService } from '../twilio/twilio.service';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -8,6 +13,7 @@ export class MessagesController {
   constructor(
     private messagesService: MessagesService,
     private twilioService: TwilioService,
+    private configService: ConfigService,
   ) {}
 
   @Get('conversations')
@@ -27,6 +33,23 @@ export class MessagesController {
   @Post('conversations/:id/read')
   markRead(@Param('id') id: string) {
     return this.messagesService.markConversationRead(id);
+  }
+
+  @Post('upload')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: 'uploads',
+      filename: (_req, file, cb) => {
+        const unique = randomUUID();
+        const ext = extname(file.originalname);
+        cb(null, `${unique}${ext}`);
+      },
+    }),
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  }))
+  uploadMedia(@UploadedFile() file: Express.Multer.File) {
+    const publicUrl = this.configService.get<string>('PUBLIC_URL') || '';
+    return { url: `${publicUrl}/uploads/${file.filename}` };
   }
 
   @Post('send')
