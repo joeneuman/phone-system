@@ -190,7 +190,7 @@ export function MessageThread({ conversation, onBack, onCall }) {
           <button
             className="send-btn"
             onClick={handleSend}
-            disabled={(!text.trim() && attachments.length === 0) || sending}
+            disabled={sending}
             title="Send"
           >
             ↑
