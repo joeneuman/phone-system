@@ -22,7 +22,7 @@ export function ConversationList({ conversations, onSelect, onNewMessage }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <div className="view-header">
         <h2>Messages</h2>
         <button className="btn btn-primary" onClick={onNewMessage}>+ New</button>

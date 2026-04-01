@@ -33,7 +33,7 @@ export function CallHistory({ calls, onCall, onText }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <div className="view-header"><h2>Call History</h2></div>
       <div className="list-container">
         {calls.map((call) => {

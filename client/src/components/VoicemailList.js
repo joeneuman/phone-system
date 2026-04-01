@@ -29,7 +29,7 @@ export function VoicemailList({ voicemails, onRefresh, onCall }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <div className="view-header"><h2>Voicemail</h2></div>
       <div className="list-container">
         {voicemails.map((vm) => (

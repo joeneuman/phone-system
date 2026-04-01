@@ -121,7 +121,7 @@ export function ContactsList({ contacts, onSearch, onSelect, onNew, onCall, onTe
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <div className="view-header">
         <h2>Contacts</h2>
         <button className="btn btn-primary" onClick={onNew}>+ Add</button>
