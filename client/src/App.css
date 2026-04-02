@@ -776,7 +776,8 @@ body {
   resize: none;
   outline: none;
   min-height: 42px;
-  max-height: 120px;
+  max-height: 132px;
+  overflow-y: auto;
 }
 
 .thread-compose textarea:focus { border-color: var(--accent); }

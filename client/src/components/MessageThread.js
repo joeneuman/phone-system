@@ -10,7 +10,10 @@ export function MessageThread({ conversation, onBack, onCall }) {
   const [convoId, setConvoId] = useState(conversation._id || null);
   const [attachments, setAttachments] = useState([]);
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+  const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
+  const userScrolledUp = useRef(false);
 
   const loadMessages = useCallback(async () => {
     if (!convoId) return;
@@ -30,8 +33,17 @@ export function MessageThread({ conversation, onBack, onCall }) {
   }, [loadMessages]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!userScrolledUp.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
+
+  const handleScroll = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    userScrolledUp.current = distanceFromBottom > 100;
+  };
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files || []);
@@ -70,6 +82,8 @@ export function MessageThread({ conversation, onBack, onCall }) {
       }
       const sent = await api.sendMessage(formatted, text.trim() || '', mediaUrls);
       setText('');
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
+      userScrolledUp.current = false;
       attachments.forEach((a) => { if (a.previewUrl) URL.revokeObjectURL(a.previewUrl); });
       setAttachments([]);
       if (!convoId && sent?.conversation) {
@@ -81,6 +95,15 @@ export function MessageThread({ conversation, onBack, onCall }) {
       console.error('Failed to send message', e);
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleTextChange = (e) => {
+    setText(e.target.value);
+    const ta = textareaRef.current;
+    if (ta) {
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
     }
   };
 
@@ -124,7 +147,7 @@ export function MessageThread({ conversation, onBack, onCall }) {
         </div>
       )}
 
-      <div className="thread-messages">
+      <div className="thread-messages" ref={messagesContainerRef} onScroll={handleScroll}>
         {messages.length === 0 && (
           <div className="empty-state">
             <p>No messages yet. Start the conversation below.</p>
@@ -181,8 +204,9 @@ export function MessageThread({ conversation, onBack, onCall }) {
             style={{ display: 'none' }}
           />
           <textarea
+            ref={textareaRef}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={handleTextChange}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
             rows={1}
