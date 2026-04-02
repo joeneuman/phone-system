@@ -37,9 +37,12 @@ jobs:
             mkdir -p /var/www/phone-system
             cp -r /opt/phone-system/client/build/. /var/www/phone-system/
 
-            # Ensure nginx allows file uploads for MMS attachments
+            # Ensure nginx allows file uploads and serves uploaded media
             if ! grep -q 'client_max_body_size' /etc/nginx/sites-available/default; then
               sed -i '/server_name phone\.giddydigs\.com.*managed by Certbot/a\    client_max_body_size 10m;' /etc/nginx/sites-available/default
+            fi
+            if ! grep -q 'location /uploads/' /etc/nginx/sites-available/default; then
+              sed -i '/location \/api\//i\    location /uploads/ {\n        proxy_pass http://127.0.0.1:3200;\n        proxy_set_header Host $host;\n    }\n' /etc/nginx/sites-available/default
             fi
 
             nginx -t
