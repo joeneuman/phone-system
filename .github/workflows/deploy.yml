@@ -38,9 +38,8 @@ jobs:
             cp -r /opt/phone-system/client/build/. /var/www/phone-system/
 
             # Ensure nginx allows file uploads for MMS attachments
-            PHONE_NGINX=$(grep -rl 'phone\.giddydigs' /etc/nginx/sites-enabled/ 2>/dev/null | head -1)
-            if [ -n "$PHONE_NGINX" ] && ! grep -q 'client_max_body_size' "$PHONE_NGINX"; then
-              sed -i '/server_name/a\    client_max_body_size 10m;' "$PHONE_NGINX"
+            if ! grep -q 'client_max_body_size' /etc/nginx/sites-available/default; then
+              sed -i '/server_name phone\.giddydigs\.com.*managed by Certbot/a\    client_max_body_size 10m;' /etc/nginx/sites-available/default
             fi
 
             nginx -t
