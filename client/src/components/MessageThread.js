@@ -14,6 +14,8 @@ export function MessageThread({ conversation, onBack, onCall }) {
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const userScrolledUp = useRef(false);
+  const prevMessageCount = useRef(0);
+  const isAutoScrolling = useRef(false);
 
   const loadMessages = useCallback(async () => {
     if (!convoId) return;
@@ -33,12 +35,20 @@ export function MessageThread({ conversation, onBack, onCall }) {
   }, [loadMessages]);
 
   useEffect(() => {
-    if (!userScrolledUp.current) {
+    // Only auto-scroll when new messages actually arrive, not on every poll
+    if (messages.length === prevMessageCount.current) return;
+    const isNewMessage = messages.length > prevMessageCount.current;
+    prevMessageCount.current = messages.length;
+
+    if (isNewMessage && !userScrolledUp.current) {
+      isAutoScrolling.current = true;
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      setTimeout(() => { isAutoScrolling.current = false; }, 500);
     }
   }, [messages]);
 
   const handleScroll = () => {
+    if (isAutoScrolling.current) return;
     const el = messagesContainerRef.current;
     if (!el) return;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
