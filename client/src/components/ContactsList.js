@@ -67,20 +67,12 @@ function DedupReviewPanel({ reviews, onResolved }) {
           </div>
           <div style={{ display: 'flex', gap: '6px' }}>
             <button
-              className="btn"
+              className="btn btn-primary"
               disabled={resolving === r.reviewId}
-              onClick={() => handleResolve(r.reviewId, 'merge', r.contactA._id)}
+              onClick={() => handleResolve(r.reviewId, 'merge')}
               style={{ fontSize: '11px', padding: '4px 8px', flex: 1 }}
             >
-              Keep {r.contactA.firstName || 'A'}
-            </button>
-            <button
-              className="btn"
-              disabled={resolving === r.reviewId}
-              onClick={() => handleResolve(r.reviewId, 'merge', r.contactB._id)}
-              style={{ fontSize: '11px', padding: '4px 8px', flex: 1 }}
-            >
-              Keep {r.contactB.firstName || 'B'}
+              Merge
             </button>
             <button
               className="btn"
@@ -163,22 +155,32 @@ export function ContactsList({ contacts, onSearch, onSelect, onNew, onCall, onTe
             <p>No contacts yet</p>
           </div>
         )}
-        {contacts.map((c) => (
-          <div key={c._id} className="list-item">
-            <div className="list-avatar" onClick={() => onSelect(c)} style={{ cursor: 'pointer' }}>
-              {getInitials(c)}
+        {contacts.map((c) => {
+          const extraCount = c.additionalPhoneNumbers?.length || 0;
+          return (
+            <div key={c._id} className="list-item">
+              <div className="list-avatar" onClick={() => onSelect(c)} style={{ cursor: 'pointer' }}>
+                {getInitials(c)}
+              </div>
+              <div className="list-item-content" onClick={() => onSelect(c)} style={{ cursor: 'pointer' }}>
+                <div className="list-item-name">{getDisplayName(c)}</div>
+                {c.company && (
+                  <div className="list-item-preview">{c.company}</div>
+                )}
+                <div className="list-item-preview">
+                  {c.phoneNumber}
+                  {extraCount > 0 && (
+                    <span style={{ color: 'var(--text-muted)', fontSize: '11px', marginLeft: 6 }}>
+                      +{extraCount} more
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button className="btn-ghost" onClick={() => onCall(c.phoneNumber)} title="Call">📞</button>
+              <button className="btn-ghost" onClick={() => onText(c.phoneNumber)} title="Text">💬</button>
             </div>
-            <div className="list-item-content" onClick={() => onSelect(c)} style={{ cursor: 'pointer' }}>
-              <div className="list-item-name">{getDisplayName(c)}</div>
-              {c.company && (
-                <div className="list-item-preview">{c.company}</div>
-              )}
-              <div className="list-item-preview">{c.phoneNumber}</div>
-            </div>
-            <button className="btn-ghost" onClick={() => onCall(c.phoneNumber)} title="Call">📞</button>
-            <button className="btn-ghost" onClick={() => onText(c.phoneNumber)} title="Text">💬</button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

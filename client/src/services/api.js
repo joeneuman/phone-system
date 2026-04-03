@@ -49,8 +49,10 @@ export const api = {
   resolveDedup: (reviewId, action, keepContactId) =>
     request('/contacts/dedup/resolve', {
       method: 'POST',
-      body: JSON.stringify({ reviewId, action, keepContactId }),
+      body: JSON.stringify({ reviewId, action, ...(keepContactId ? { keepContactId } : {}) }),
     }),
+  lookupNumber: (phoneNumber) =>
+    request(`/contacts/lookup/${encodeURIComponent(phoneNumber)}`),
 
   // Messages
   uploadMedia: async (file) => {

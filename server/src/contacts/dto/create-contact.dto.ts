@@ -56,10 +56,22 @@ export class BulkSyncDto {
   contacts: SyncContactDto[];
 }
 
+export class PhoneNumberEntryDto {
+  @IsString()
+  @Matches(/^\+?[1-9]\d{1,14}$/, { message: 'Phone number must be in E.164 format' })
+  number: string;
+
+  @IsString() @IsOptional()
+  label?: string;
+}
+
 export class UpdateContactDto {
   @IsString() @IsOptional()
   @Matches(/^\+?[1-9]\d{1,14}$/, { message: 'Phone number must be in E.164 format' })
   phoneNumber?: string;
+
+  @IsString() @IsOptional()
+  phoneLabel?: string;
 
   @IsString() @IsOptional()
   firstName?: string;
@@ -78,4 +90,9 @@ export class UpdateContactDto {
 
   @IsBoolean() @IsOptional()
   favorite?: boolean;
+
+  @IsArray() @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => PhoneNumberEntryDto)
+  additionalPhoneNumbers?: PhoneNumberEntryDto[];
 }

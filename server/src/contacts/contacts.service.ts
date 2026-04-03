@@ -3,6 +3,9 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Contact } from './schemas/contact.schema';
 import { DedupReview } from './schemas/dedup-review.schema';
+import { Conversation } from '../messages/schemas/conversation.schema';
+import { CallLog } from '../calls/schemas/call-log.schema';
+import { Voicemail } from '../voicemail/schemas/voicemail.schema';
 import { CreateContactDto, UpdateContactDto, SyncContactDto } from './dto/create-contact.dto';
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -12,6 +15,9 @@ export class ContactsService implements OnModuleInit {
   constructor(
     @InjectModel(Contact.name) private contactModel: Model<Contact>,
     @InjectModel(DedupReview.name) private dedupReviewModel: Model<DedupReview>,
+    @InjectModel(Conversation.name) private conversationModel: Model<Conversation>,
+    @InjectModel(CallLog.name) private callLogModel: Model<CallLog>,
+    @InjectModel(Voicemail.name) private voicemailModel: Model<Voicemail>,
   ) {}
 
   onModuleInit() {
@@ -32,7 +38,9 @@ export class ContactsService implements OnModuleInit {
   }
 
   async findByPhone(phoneNumber: string) {
-    return this.contactModel.findOne({ phoneNumber }).exec();
+    return this.contactModel.findOne({
+      $or: [{ phoneNumber }, { 'additionalPhoneNumbers.number': phoneNumber }],
+    }).exec();
   }
 
   async findById(id: string) {
@@ -282,9 +290,22 @@ export class ContactsService implements OnModuleInit {
     }
 
     if (action === 'merge') {
-      if (!keepContactId) return { ok: false, message: 'keepContactId required for merge' };
+      // Auto-pick keeper if not specified: prefer the contact with more populated fields
+      let keepId: string;
+      if (keepContactId) {
+        keepId = keepContactId;
+      } else {
+        const a = await this.contactModel.findById(review.contactA).exec();
+        const b = await this.contactModel.findById(review.contactB).exec();
+        const countFields = (c: any) => {
+          if (!c) return 0;
+          return ['firstName', 'lastName', 'company', 'email', 'notes'].filter(f => c[f]).length;
+        };
+        keepId = countFields(a) >= countFields(b)
+          ? review.contactA.toString()
+          : review.contactB.toString();
+      }
 
-      const keepId = keepContactId;
       const deleteId = review.contactA.toString() === keepId
         ? review.contactB.toString()
         : review.contactA.toString();
@@ -313,9 +334,50 @@ export class ContactsService implements OnModuleInit {
           mergeFields.metadata = mergedMetadata;
         }
 
+        // Merge phone numbers: collect all unique numbers from both contacts
+        const keeperNumbers = new Set<string>([toKeep.phoneNumber]);
+        (toKeep.additionalPhoneNumbers || []).forEach(p => keeperNumbers.add(p.number));
+
+        const numbersToAdd: { number: string; label?: string }[] = [];
+        if (toDelete.phoneNumber && !keeperNumbers.has(toDelete.phoneNumber)) {
+          // Carry over any label from the deleted contact's additional numbers list
+          const existingLabel = (toDelete.additionalPhoneNumbers || [])
+            .find(p => p.number === toDelete.phoneNumber)?.label;
+          numbersToAdd.push({ number: toDelete.phoneNumber, ...(existingLabel ? { label: existingLabel } : {}) });
+          keeperNumbers.add(toDelete.phoneNumber);
+        }
+        for (const p of (toDelete.additionalPhoneNumbers || [])) {
+          if (!keeperNumbers.has(p.number)) {
+            numbersToAdd.push({ number: p.number, ...(p.label ? { label: p.label } : {}) });
+            keeperNumbers.add(p.number);
+          }
+        }
+
         if (Object.keys(mergeFields).length > 0) {
           await this.contactModel.updateOne({ _id: toKeep._id }, { $set: mergeFields });
         }
+        if (numbersToAdd.length > 0) {
+          await this.contactModel.updateOne(
+            { _id: toKeep._id },
+            { $push: { additionalPhoneNumbers: { $each: numbersToAdd } } },
+          );
+        }
+
+        // Re-link conversations, call logs, and voicemails from deleted contact to keeper
+        const keeperName = [toKeep.firstName || mergeFields.firstName, toKeep.lastName || mergeFields.lastName]
+          .filter(Boolean).join(' ') || toKeep.phoneNumber;
+        await this.conversationModel.updateMany(
+          { contact: toDelete._id },
+          { $set: { contact: toKeep._id } },
+        );
+        await this.callLogModel.updateMany(
+          { contact: toDelete._id },
+          { $set: { contact: toKeep._id, contactName: keeperName } },
+        );
+        await this.voicemailModel.updateMany(
+          { contact: toDelete._id },
+          { $set: { contact: toKeep._id, contactName: keeperName } },
+        );
 
         await this.contactModel.deleteOne({ _id: toDelete._id });
       }

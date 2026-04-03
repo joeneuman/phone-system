@@ -1,10 +1,14 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, Query, HttpCode, HttpStatus } from '@nestjs/common';
 import { ContactsService } from './contacts.service';
 import { CreateContactDto, UpdateContactDto, BulkSyncDto } from './dto/create-contact.dto';
+import { TwilioService } from '../twilio/twilio.service';
 
 @Controller('contacts')
 export class ContactsController {
-  constructor(private contactsService: ContactsService) {}
+  constructor(
+    private contactsService: ContactsService,
+    private twilioService: TwilioService,
+  ) {}
 
   @Get()
   findAll(@Query('search') search?: string) {
@@ -37,6 +41,19 @@ export class ContactsController {
   @HttpCode(HttpStatus.OK)
   bulkSync(@Body() dto: BulkSyncDto) {
     return this.contactsService.bulkSync(dto.contacts);
+  }
+
+  @Get('lookup/:phoneNumber')
+  async lookupNumber(@Param('phoneNumber') phoneNumber: string) {
+    try {
+      const result = await this.twilioService.getClient()
+        .lookups.v2.phoneNumbers(phoneNumber)
+        .fetch({ fields: 'line_type_intelligence' });
+      const lineType = result.lineTypeIntelligence?.type || 'unknown';
+      return { number: phoneNumber, type: lineType };
+    } catch (e) {
+      return { number: phoneNumber, type: 'unknown', error: e.message };
+    }
   }
 
   @Get(':id')
