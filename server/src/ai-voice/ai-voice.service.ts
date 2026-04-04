@@ -97,6 +97,7 @@ interface CallSession {
   isPlaying: boolean;
   lastSearchResults: ListingResult[];
   lastSearchParams: ListingSearchParams | null;
+  sentUrls: string[];
 }
 
 @Injectable()
@@ -146,6 +147,7 @@ export class AiVoiceService implements OnModuleInit {
       isPlaying: false,
       lastSearchResults: [],
       lastSearchParams: null,
+      sentUrls: [],
     };
     this.sessions.set(callSid, session);
     return session;
@@ -231,7 +233,10 @@ ${transcript}`,
       minute: '2-digit',
       hour12: false,
     });
-    const noteEntry = `[${timestamp}] ${summary}`;
+    let noteEntry = `[${timestamp}] ${summary}`;
+    if (session.sentUrls.length > 0) {
+      noteEntry += '\n  Sent: ' + session.sentUrls.join(', ');
+    }
 
     if (session.isNewContact) {
       // Create a new contact for this unknown caller
@@ -552,6 +557,7 @@ ${transcript}`,
               from: this.twilioService.getSmsNumber(),
               twilioSid: twilioMsg.sid,
             });
+            if (longUrl) session.sentUrls.push(longUrl);
             console.log(`Text sent to ${session.from}`);
             toolResults.push({
               type: 'tool_result',
