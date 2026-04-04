@@ -32,6 +32,8 @@ export function setupConversationRelayWebSocket(
     const callerNumberFromQuery = url.searchParams.get('callerNumber') || '';
     const callerNameFromQuery = url.searchParams.get('callerName') || '';
     const callerNotesFromQuery = url.searchParams.get('callerNotes') || '';
+    const isNewContact = url.searchParams.get('isNewContact') !== '0';
+    const contactIdFromQuery = url.searchParams.get('contactId') || null;
 
     let callSid = '';
 
@@ -49,7 +51,7 @@ export function setupConversationRelayWebSocket(
           callSid = msg.callSid || '';
           const streamSid = msg.streamSid || '';
           const from = callerNumberFromQuery || msg.from || '';
-          aiVoiceService.createSession(callSid, streamSid, from, callerNameFromQuery, callerNotesFromQuery);
+          aiVoiceService.createSession(callSid, streamSid, from, callerNameFromQuery, callerNotesFromQuery, isNewContact, contactIdFromQuery);
           console.log(`AI session started for call ${callSid} from ${from}${callerNameFromQuery ? ` (${callerNameFromQuery})` : ''}`);
           break;
         }
@@ -99,10 +101,10 @@ export function setupConversationRelayWebSocket(
       }
     });
 
-    ws.on('close', () => {
+    ws.on('close', async () => {
       console.log(`ConversationRelay disconnected for call ${callSid}`);
       if (callSid) {
-        aiVoiceService.removeSession(callSid);
+        await aiVoiceService.removeSession(callSid);
       }
     });
 

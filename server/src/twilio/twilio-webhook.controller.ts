@@ -83,12 +83,18 @@ export class TwilioWebhookController {
       let callerName = '';
       let callerFirstName = '';
       let callerNotes = '';
+      let isNewContact = true;
+      let contactId = '';
       try {
         const contact = await this.contactsService.findByPhone(from);
-        if (contact?.firstName) {
-          callerFirstName = contact.firstName;
-          callerName = [contact.firstName, contact.lastName].filter(Boolean).join(' ');
-          callerNotes = contact.notes || '';
+        if (contact) {
+          isNewContact = false;
+          contactId = contact._id.toString();
+          if (contact.firstName) {
+            callerFirstName = contact.firstName;
+            callerName = [contact.firstName, contact.lastName].filter(Boolean).join(' ');
+            callerNotes = contact.notes || '';
+          }
         }
       } catch (e) {
         console.error('Contact lookup failed, using default greeting:', e.message);
@@ -104,6 +110,8 @@ export class TwilioWebhookController {
       const wsParams = new URLSearchParams({ callerNumber: from });
       if (callerName) wsParams.set('callerName', callerName);
       if (callerNotes) wsParams.set('callerNotes', callerNotes);
+      wsParams.set('isNewContact', isNewContact ? '1' : '0');
+      if (contactId) wsParams.set('contactId', contactId);
 
       connect.conversationRelay({
         url: `${wsUrl}?${wsParams.toString()}`,

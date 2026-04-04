@@ -90,6 +90,8 @@ interface CallSession {
   from: string;
   callerName: string;
   callerNotes: string;
+  isNewContact: boolean;
+  contactId: string | null;
   messages: Array<{ role: 'user' | 'assistant'; content: any }>;
   abortController: AbortController | null;
   isPlaying: boolean;
@@ -122,13 +124,23 @@ export class AiVoiceService implements OnModuleInit {
     }
   }
 
-  createSession(callSid: string, streamSid: string, from: string, callerName = '', callerNotes = ''): CallSession {
+  createSession(
+    callSid: string,
+    streamSid: string,
+    from: string,
+    callerName = '',
+    callerNotes = '',
+    isNewContact = true,
+    contactId: string | null = null,
+  ): CallSession {
     const session: CallSession = {
       callSid,
       streamSid,
       from,
       callerName,
       callerNotes,
+      isNewContact,
+      contactId,
       messages: [],
       abortController: null,
       isPlaying: false,
@@ -143,12 +155,107 @@ export class AiVoiceService implements OnModuleInit {
     return this.sessions.get(callSid);
   }
 
-  removeSession(callSid: string) {
+  async removeSession(callSid: string) {
     const session = this.sessions.get(callSid);
-    if (session?.abortController) {
+    if (!session) return;
+
+    if (session.abortController) {
       session.abortController.abort();
     }
+
+    // Summarize the call and save to contact before discarding the session
+    try {
+      await this.summarizeAndSaveCall(session);
+    } catch (err) {
+      console.error(`[${callSid}] Failed to save call summary:`, err?.message || err);
+    }
+
     this.sessions.delete(callSid);
+  }
+
+  private async summarizeAndSaveCall(session: CallSession) {
+    if (!this.anthropic) return;
+
+    // Only summarize if the caller actually communicated (at least 1 user message + 1 assistant response)
+    const userMessages = session.messages.filter(m => m.role === 'user' && typeof m.content === 'string');
+    if (userMessages.length < 1) {
+      console.log(`[${session.callSid}] No conversation to summarize, skipping`);
+      return;
+    }
+
+    // Build a simplified transcript for the summarizer
+    const transcript = session.messages
+      .filter(m => typeof m.content === 'string')
+      .map(m => `${m.role === 'user' ? 'Caller' : 'Lucy'}: ${m.content}`)
+      .join('\n');
+
+    const response = await this.anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 200,
+      system: 'You analyze phone call transcripts and return JSON. No markdown, no code fences, just raw JSON.',
+      messages: [
+        {
+          role: 'user',
+          content: `Analyze this phone conversation between Lucy (receptionist) and a caller. Return a JSON object with:
+- "summary": A brief 1-2 sentence summary of what the caller wanted or discussed.
+- "callerName": The caller's name if they mentioned it during the call, or null if unknown.
+- "firstName": Just the first name if available, or null.
+- "lastName": Just the last name if available, or null.
+
+Transcript:
+${transcript}`,
+        },
+      ],
+    });
+
+    const text = response.content[0]?.type === 'text' ? response.content[0].text : '';
+    let summary = 'Call with Lucy';
+    let firstName: string | null = null;
+    let lastName: string | null = null;
+
+    try {
+      const parsed = JSON.parse(text);
+      summary = parsed.summary || summary;
+      firstName = parsed.firstName || null;
+      lastName = parsed.lastName || null;
+    } catch {
+      console.error(`[${session.callSid}] Failed to parse summary JSON:`, text);
+    }
+
+    const now = new Date();
+    const timestamp = now.toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const noteEntry = `[${timestamp}] ${summary}`;
+
+    if (session.isNewContact) {
+      // Create a new contact for this unknown caller
+      const last4 = session.from.slice(-4);
+      const contactData: any = {
+        phoneNumber: session.from,
+        firstName: firstName || 'Unknown',
+        lastName: lastName || last4,
+        notes: noteEntry,
+      };
+      const created = await this.contactsService.create(contactData);
+      console.log(`[${session.callSid}] Created new contact for ${session.from}: ${contactData.firstName} ${contactData.lastName} (${created._id})`);
+    } else if (session.contactId) {
+      // Append note to existing contact
+      const contact = await this.contactsService.findById(session.contactId);
+      if (contact) {
+        const existingNotes = contact.notes || '';
+        const updatedNotes = existingNotes
+          ? `${existingNotes}\n${noteEntry}`
+          : noteEntry;
+        await this.contactsService.update(session.contactId, { notes: updatedNotes });
+        console.log(`[${session.callSid}] Appended call summary to contact ${session.contactId}`);
+      }
+    }
   }
 
   getRandomFiller(): string {
