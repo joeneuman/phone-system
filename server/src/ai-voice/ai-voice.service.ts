@@ -18,7 +18,8 @@ const FILLER_PHRASES = [
   'Alright...',
 ];
 
-const SYSTEM_PROMPT = `You are Lucy, the friendly and warm phone assistant for Giddy Digs, a real estate company. You are having a real-time phone conversation with a caller.
+/** Hardcoded fallback used when the identity API is unreachable */
+const IDENTITY_FALLBACK = `You are Lucy, the friendly and warm phone assistant for Giddy Digs, a real estate company. You are having a real-time phone conversation with a caller.
 
 YOUR IDENTITY:
 - Your name is Lucy. You are female. You are the AI that runs Giddy Digs.
@@ -27,8 +28,10 @@ YOUR IDENTITY:
 - You have a warm, confident, and slightly playful personality — like a friendly receptionist who genuinely enjoys helping people.
 - Say "Giddy Digs" with warmth and pride, like you love where you work — but keep it natural, not over-the-top.
 - Never say "As an AI" or reference being artificial in any way. You're just Lucy.
-- Always use contractions — say I'm, we've, that's, don't, can't, won't, it's. Never use the uncontracted form.
+- Always use contractions — say I'm, we've, that's, don't, can't, won't, it's. Never use the uncontracted form.`;
 
+/** Phone-channel-specific rules appended after the identity prompt */
+const PHONE_RULES = `
 RESPONSE RULES:
 - Keep responses to 1-2 sentences maximum. Be concise and conversational.
 - Speak at a relaxed, unhurried pace. Use pauses naturally — you're not in a rush.
@@ -89,6 +92,7 @@ interface CallSession {
   streamSid: string;
   from: string;
   callerName: string;
+  callerCnam: string;
   callerNotes: string;
   isNewContact: boolean;
   contactId: string | null;
@@ -103,6 +107,7 @@ interface CallSession {
 @Injectable()
 export class AiVoiceService implements OnModuleInit {
   private anthropic: Anthropic;
+  private identityPrompt: string | null = null;
   private sessions: Map<string, CallSession> = new Map();
 
   constructor(
@@ -115,13 +120,21 @@ export class AiVoiceService implements OnModuleInit {
     private messagesService: MessagesService,
   ) {}
 
-  onModuleInit() {
+  async onModuleInit() {
     const apiKey = this.config.get<string>('ANTHROPIC_API_KEY');
     if (apiKey) {
       this.anthropic = new Anthropic({ apiKey });
       console.log('AI Voice service initialized with Anthropic API');
     } else {
       console.warn('ANTHROPIC_API_KEY not set — AI voice attendant disabled');
+    }
+
+    // Fetch shared Lucy identity prompt from giddydigs.com
+    this.identityPrompt = await this.listingsService.fetchIdentityPrompt();
+    if (this.identityPrompt) {
+      console.log('Fetched Lucy identity prompt from API');
+    } else {
+      console.warn('Using fallback identity prompt — API unavailable');
     }
   }
 
@@ -133,12 +146,14 @@ export class AiVoiceService implements OnModuleInit {
     callerNotes = '',
     isNewContact = true,
     contactId: string | null = null,
+    callerCnam = '',
   ): CallSession {
     const session: CallSession = {
       callSid,
       streamSid,
       from,
       callerName,
+      callerCnam,
       callerNotes,
       isNewContact,
       contactId,
@@ -187,9 +202,24 @@ export class AiVoiceService implements OnModuleInit {
 
     // Build a simplified transcript for the summarizer
     const transcript = session.messages
-      .filter(m => typeof m.content === 'string')
-      .map(m => `${m.role === 'user' ? 'Caller' : 'Lucy'}: ${m.content}`)
+      .map(m => {
+        const speaker = m.role === 'user' ? 'Caller' : 'Lucy';
+        if (typeof m.content === 'string') {
+          return `${speaker}: ${m.content}`;
+        }
+        // Extract text from content blocks (tool_use messages have mixed content)
+        if (Array.isArray(m.content)) {
+          const textParts = m.content
+            .filter((b: any) => b.type === 'text' && b.text)
+            .map((b: any) => b.text);
+          if (textParts.length > 0) return `${speaker}: ${textParts.join(' ')}`;
+        }
+        return null;
+      })
+      .filter(Boolean)
       .join('\n');
+
+    console.log(`[${session.callSid}] Summarizing transcript (${transcript.length} chars, ${session.messages.length} messages)`);
 
     const response = await this.anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -240,24 +270,40 @@ ${transcript}`,
 
     if (session.isNewContact) {
       // Create a new contact for this unknown caller
+      // Priority: name from conversation > Twilio CNAM > fallback
       const last4 = session.from.slice(-4);
+      let cnamFirst = '';
+      let cnamLast = '';
+      if (session.callerCnam) {
+        const parts = session.callerCnam.trim().split(/\s+/);
+        cnamFirst = parts[0] || '';
+        cnamLast = parts.slice(1).join(' ') || '';
+      }
       const contactData: any = {
         phoneNumber: session.from,
-        firstName: firstName || 'Unknown',
-        lastName: lastName || last4,
+        firstName: firstName || cnamFirst || 'Unknown',
+        lastName: lastName || cnamLast || last4,
         notes: noteEntry,
       };
       const created = await this.contactsService.create(contactData);
       console.log(`[${session.callSid}] Created new contact for ${session.from}: ${contactData.firstName} ${contactData.lastName} (${created._id})`);
     } else if (session.contactId) {
-      // Append note to existing contact
+      // Append note to existing contact, and update name if we learned it
       const contact = await this.contactsService.findById(session.contactId);
       if (contact) {
         const existingNotes = contact.notes || '';
         const updatedNotes = existingNotes
           ? `${existingNotes}\n${noteEntry}`
           : noteEntry;
-        await this.contactsService.update(session.contactId, { notes: updatedNotes });
+        const updateData: any = { notes: updatedNotes };
+        // Update name if current name is placeholder and we extracted a real one
+        if (firstName && (!contact.firstName || contact.firstName === 'Unknown')) {
+          updateData.firstName = firstName;
+        }
+        if (lastName && (!contact.lastName || /^\d+$/.test(contact.lastName))) {
+          updateData.lastName = lastName;
+        }
+        await this.contactsService.update(session.contactId, updateData);
         console.log(`[${session.callSid}] Appended call summary to contact ${session.contactId}`);
       }
     }
@@ -429,7 +475,7 @@ ${transcript}`,
       {
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 300,
-        system: SYSTEM_PROMPT + callerContext,
+        system: (this.identityPrompt || IDENTITY_FALLBACK) + '\n\n' + PHONE_RULES + callerContext,
         messages: session.messages,
         tools: this.getTools(),
       },

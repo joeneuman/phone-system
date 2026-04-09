@@ -338,6 +338,21 @@ export class ListingsService {
     return `${this.apiUrl}/?mode=search&city=${encodeURIComponent(listing.city)}`;
   }
 
+  async fetchIdentityPrompt(): Promise<string | null> {
+    try {
+      const response = await fetch(`${this.apiUrl}/api/ai-assistant/identity`);
+      if (!response.ok) {
+        this.logger.warn(`Identity endpoint returned ${response.status}`);
+        return null;
+      }
+      const data = await response.json();
+      return data.prompt || null;
+    } catch (err) {
+      this.logger.warn(`Identity endpoint unavailable: ${err.message}`);
+      return null;
+    }
+  }
+
   async shortenUrl(longUrl: string): Promise<string> {
     try {
       const shortenerUrl = this.config.get<string>('URL_SHORTENER_URL') || 'https://giddydigs.com';
