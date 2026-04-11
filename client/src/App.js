@@ -299,7 +299,15 @@ function App() {
     <div className="app">
       <Sidebar
         view={view}
-        setView={(v) => { setView(v); setSelectedConvo(null); setEditingContact(null); }}
+        setView={(v) => {
+          setView(v);
+          setEditingContact(null);
+          if (v === 'messages' && isWideScreen && conversations.length > 0) {
+            setSelectedConvo(conversations[0]);
+          } else {
+            setSelectedConvo(null);
+          }
+        }}
         unreadMessages={totalUnread}
         unreadVoicemails={unreadVm}
         deviceReady={phone.deviceReady}
