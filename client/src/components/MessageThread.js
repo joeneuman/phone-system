@@ -21,6 +21,18 @@ export function MessageThread({ conversation, onBack, onCall, showBackButton = t
   const prevMessageCount = useRef(0);
   const isAutoScrolling = useRef(false);
 
+  useEffect(() => {
+    setConvoId(conversation._id || null);
+    setToNumber(conversation.phoneNumber || '');
+    setMessages([]);
+    setOverrideName(null);
+    setIsEditingName(false);
+    setText('');
+    setAttachments([]);
+    userScrolledUp.current = false;
+    prevMessageCount.current = 0;
+  }, [conversation._id, conversation.phoneNumber]);
+
   const loadMessages = useCallback(async () => {
     if (!convoId) return;
     try {
