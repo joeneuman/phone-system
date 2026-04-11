@@ -464,14 +464,14 @@ ${transcript}`,
     { type: 'text'; token: string; last: boolean } | { type: 'transfer'; reason: string }
   > {
     // Build caller context for the system prompt
-    let callerContext = '';
+    let callerContext = '\n\nCALLER INFO:\n';
     if (session.callerName) {
-      callerContext = `\n\nCALLER INFO:\nThe caller is ${session.callerName}. Use their first name naturally in conversation — don't overdo it, just be personal.`;
-      if (session.callerNotes) {
-        callerContext += `\nNotes: ${session.callerNotes}`;
-      }
+      callerContext += `The caller is ${session.callerName}. Use their first name naturally in conversation — don't overdo it, just be personal.`;
     } else {
-      callerContext = '\n\nCALLER INFO:\nThe caller is unknown. Do not guess their name.';
+      callerContext += 'The caller is unknown. Do not guess their name. If they tell you their name, remember it and use it naturally.';
+    }
+    if (session.callerNotes) {
+      callerContext += `\n\nPAST INTERACTIONS:\nBelow are notes from previous calls with this person. Use this context to be helpful — reference what they've discussed before if relevant. If they frequently ask to speak with Joe, proactively offer to transfer them. Be natural about it, don't recite the notes back.\n${session.callerNotes}`;
     }
 
     const stream = this.anthropic.messages.stream(

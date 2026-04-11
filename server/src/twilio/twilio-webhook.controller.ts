@@ -62,6 +62,7 @@ export class TwilioWebhookController {
     const twiml = new VoiceResponse();
     const from = body.From;
     const callSid = body.CallSid;
+    const callerCnam = body.CallerName || '';
     const publicUrl = this.twilioService.getPublicUrl();
 
     try {
@@ -90,14 +91,36 @@ export class TwilioWebhookController {
         if (contact) {
           isNewContact = false;
           contactId = contact._id.toString();
-          if (contact.firstName) {
+          if (contact.firstName && contact.firstName !== 'Unknown') {
             callerFirstName = contact.firstName;
             callerName = [contact.firstName, contact.lastName].filter(Boolean).join(' ');
-            callerNotes = contact.notes || '';
           }
+          callerNotes = contact.notes || '';
         }
       } catch (e) {
         console.error('Contact lookup failed, using default greeting:', e.message);
+      }
+
+      // If unknown caller with no CNAM, try Twilio Lookups caller_name
+      if (!callerFirstName && !callerCnam) {
+        try {
+          const lookupResult = await this.twilioService.getClient()
+            .lookups.v2.phoneNumbers(from)
+            .fetch({ fields: 'caller_name' });
+          const cnamResult = (lookupResult as any).callerName;
+          if (cnamResult?.caller_name) {
+            callerCnam = cnamResult.caller_name;
+            console.log(`Twilio Lookups CNAM for ${from}: "${callerCnam}" (type: ${cnamResult.caller_type})`);
+            // Only use as greeting if it's a person, not a business
+            if (cnamResult.caller_type === 'CONSUMER') {
+              const parts = callerCnam.trim().split(/\s+/);
+              callerFirstName = parts[0];
+              callerName = callerCnam;
+            }
+          }
+        } catch (e) {
+          console.error('Twilio Lookups caller_name failed:', e.message);
+        }
       }
 
       const greeting = callerFirstName
@@ -109,6 +132,7 @@ export class TwilioWebhookController {
       const wsUrl = publicUrl.replace(/^https?:\/\//, 'wss://') + '/ws/conversation-relay';
       const wsParams = new URLSearchParams({ callerNumber: from });
       if (callerName) wsParams.set('callerName', callerName);
+      if (callerCnam) wsParams.set('callerCnam', callerCnam);
       if (callerNotes) wsParams.set('callerNotes', callerNotes);
       wsParams.set('isNewContact', isNewContact ? '1' : '0');
       if (contactId) wsParams.set('contactId', contactId);
@@ -262,8 +286,9 @@ export class TwilioWebhookController {
           listing.sqft ? `${listing.sqft.toLocaleString()} sqft` : null,
         ].filter(Boolean).join(' | ');
 
+        const shortUrl = await this.listingsService.shortenUrl(listing.url);
         twiml.message(
-          `🏠 ${listing.address}, ${listing.city}\n💰 ${price} | ${details}\nView details: ${listing.url}`,
+          `🏠 ${listing.address}, ${listing.city}\n💰 ${price} | ${details}\nView details: ${shortUrl}`,
         );
       }
     }
