@@ -49,13 +49,23 @@ export class CallsService {
     }
   }
 
-  async getCallHistory(limit = 50, offset = 0): Promise<CallLog[]> {
-    return this.callLogModel
+  async getCallHistory(limit = 50, offset = 0): Promise<any[]> {
+    const calls = await this.callLogModel
       .find()
       .sort({ createdAt: -1 })
       .skip(offset)
       .limit(limit)
+      .lean()
       .exec();
+
+    return Promise.all(
+      calls.map(async (call) => {
+        const remoteNumber = call.direction === 'inbound' ? call.from : call.to;
+        const contactName = await this.contactsService.resolveContactName(remoteNumber);
+        const contact = await this.contactsService.findByPhone(remoteNumber);
+        return { ...call, contactName, contact: contact?._id || call.contact };
+      }),
+    );
   }
 
   async getCallsByPhone(phoneNumber: string): Promise<CallLog[]> {

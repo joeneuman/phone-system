@@ -20,7 +20,7 @@ function highlightMatch(text, query) {
   );
 }
 
-export function ConversationList({ conversations, onSelect, onNewMessage, activeConvoId }) {
+export function ConversationList({ conversations, onSelect, onNewMessage, activeConvoId, onAvatarClick }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState(null);
   const [searching, setSearching] = useState(false);
@@ -95,13 +95,20 @@ export function ConversationList({ conversations, onSelect, onNewMessage, active
             className={`list-item ${c._id === activeConvoId ? 'active' : ''}`}
             onClick={() => onSelect(c)}
           >
-            <div className="list-avatar">
+            <div
+              className="list-avatar clickable"
+              onClick={(e) => { e.stopPropagation(); onAvatarClick && onAvatarClick(c); }}
+              title="View contact"
+            >
               {getInitials(c.contactName)}
             </div>
             <div className="list-item-content">
               <div className="list-item-top">
                 <span className="list-item-name">
                   {c.contactName || c.phoneNumber}
+                  {c.contactName && c.phoneNumber && (
+                    <span className="list-item-phone">{c.phoneNumber}</span>
+                  )}
                 </span>
                 <span className="list-item-time">
                   {c.lastMessageAt

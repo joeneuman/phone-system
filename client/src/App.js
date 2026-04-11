@@ -355,6 +355,20 @@ function App() {
                   onSelect={(c) => setSelectedConvo(c)}
                   onNewMessage={() => setSelectedConvo({ isNew: true })}
                   activeConvoId={selectedConvo?._id}
+                  onAvatarClick={async (c) => {
+                    try {
+                      let contact;
+                      if (c.contact) {
+                        contact = await api.getContact(c.contact);
+                      } else if (c.phoneNumber) {
+                        contact = await api.getContactByPhone(c.phoneNumber);
+                      }
+                      if (contact) {
+                        setEditingContact(contact);
+                        setView('contacts');
+                      }
+                    } catch (e) { console.error('Failed to load contact', e); }
+                  }}
                 />
               </div>
             )}
