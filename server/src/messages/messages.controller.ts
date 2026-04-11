@@ -21,6 +21,14 @@ export class MessagesController {
     return this.messagesService.getConversations();
   }
 
+  @Get('by-phone/:phoneNumber')
+  getMessagesByPhone(
+    @Param('phoneNumber') phoneNumber: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.messagesService.getMessagesByPhone(phoneNumber, limit ? parseInt(limit) : 50);
+  }
+
   @Get('search')
   searchMessages(@Query('q') query: string, @Query('limit') limit?: string) {
     if (!query || query.trim().length < 2) return [];

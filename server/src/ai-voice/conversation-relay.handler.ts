@@ -31,6 +31,7 @@ export function setupConversationRelayWebSocket(
     const url = new URL(request.url, 'http://localhost');
     const callerNumberFromQuery = url.searchParams.get('callerNumber') || '';
     const callerNameFromQuery = url.searchParams.get('callerName') || '';
+    const callerCnamFromQuery = url.searchParams.get('callerCnam') || '';
     const callerNotesFromQuery = url.searchParams.get('callerNotes') || '';
     const isNewContact = url.searchParams.get('isNewContact') !== '0';
     const contactIdFromQuery = url.searchParams.get('contactId') || null;
@@ -51,7 +52,7 @@ export function setupConversationRelayWebSocket(
           callSid = msg.callSid || '';
           const streamSid = msg.streamSid || '';
           const from = callerNumberFromQuery || msg.from || '';
-          aiVoiceService.createSession(callSid, streamSid, from, callerNameFromQuery, callerNotesFromQuery, isNewContact, contactIdFromQuery);
+          await aiVoiceService.createSession(callSid, streamSid, from, callerNameFromQuery, callerNotesFromQuery, isNewContact, contactIdFromQuery, callerCnamFromQuery);
           console.log(`AI session started for call ${callSid} from ${from}${callerNameFromQuery ? ` (${callerNameFromQuery})` : ''}`);
           break;
         }

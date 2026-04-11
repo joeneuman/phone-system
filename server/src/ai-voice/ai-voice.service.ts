@@ -94,6 +94,7 @@ interface CallSession {
   callerName: string;
   callerCnam: string;
   callerNotes: string;
+  callerTextHistory: string;
   isNewContact: boolean;
   contactId: string | null;
   messages: Array<{ role: 'user' | 'assistant'; content: any }>;
@@ -138,7 +139,7 @@ export class AiVoiceService implements OnModuleInit {
     }
   }
 
-  createSession(
+  async createSession(
     callSid: string,
     streamSid: string,
     from: string,
@@ -147,7 +148,24 @@ export class AiVoiceService implements OnModuleInit {
     isNewContact = true,
     contactId: string | null = null,
     callerCnam = '',
-  ): CallSession {
+  ): Promise<CallSession> {
+    // Fetch recent text messages with this caller
+    let callerTextHistory = '';
+    try {
+      const recentTexts = await this.messagesService.getMessagesByPhone(from, 20);
+      if (recentTexts.length > 0) {
+        callerTextHistory = recentTexts
+          .reverse()
+          .map((m: any) => {
+            const dir = m.direction === 'inbound' ? 'Them' : 'Us';
+            return `${dir}: ${m.body}`;
+          })
+          .join('\n');
+      }
+    } catch (e) {
+      console.error(`[${callSid}] Failed to fetch text history:`, e?.message);
+    }
+
     const session: CallSession = {
       callSid,
       streamSid,
@@ -155,6 +173,7 @@ export class AiVoiceService implements OnModuleInit {
       callerName,
       callerCnam,
       callerNotes,
+      callerTextHistory,
       isNewContact,
       contactId,
       messages: [],
@@ -467,11 +486,16 @@ ${transcript}`,
     let callerContext = '\n\nCALLER INFO:\n';
     if (session.callerName) {
       callerContext += `The caller is ${session.callerName}. Use their first name naturally in conversation — don't overdo it, just be personal.`;
+    } else if (session.isNewContact) {
+      callerContext += 'This is a FIRST-TIME caller — they have never called before. Early in the conversation (after your initial greeting and their first response), naturally ask for their name. Say something like "And who do I have the pleasure of speaking with?" or "Can I get your name?" Keep it warm and natural. IMPORTANT: Whatever they say their name is, repeat it back to them warmly. For example if they say "Michael", you say "Hi Michael!" If they say "none of your business", you say "Oh, hi None of your business!" Always repeat back exactly what they said.';
     } else {
-      callerContext += 'The caller is unknown. Do not guess their name. If they tell you their name, remember it and use it naturally.';
+      callerContext += 'The caller is a returning caller but we don\'t have their name yet. If they tell you their name, repeat it back to them warmly — like "Hi Michael!" — and use it naturally going forward. You can ask "Who am I speaking with?" if there\'s a natural moment.';
     }
     if (session.callerNotes) {
-      callerContext += `\n\nPAST INTERACTIONS:\nBelow are notes from previous calls with this person. Use this context to be helpful — reference what they've discussed before if relevant. If they frequently ask to speak with Joe, proactively offer to transfer them. Be natural about it, don't recite the notes back.\n${session.callerNotes}`;
+      callerContext += `\n\nPAST CALL NOTES:\nBelow are notes from previous calls with this person. Use this context to be helpful — reference what they've discussed before if relevant. If they frequently ask to speak with Joe, proactively offer to transfer them. Be natural about it, don't recite the notes back.\n${session.callerNotes}`;
+    }
+    if (session.callerTextHistory) {
+      callerContext += `\n\nTEXT MESSAGE HISTORY:\nBelow are recent text messages between us and this caller. Use this context to understand who they are and what they've been discussing. If their name appears in the texts and we don't have it yet, use it. Don't mention that you read their texts — just be naturally informed.\n${session.callerTextHistory}`;
     }
 
     const stream = this.anthropic.messages.stream(

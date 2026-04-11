@@ -73,6 +73,8 @@ export const api = {
   },
   sendMessage: (to, body, mediaUrls) =>
     request('/messages/send', { method: 'POST', body: JSON.stringify({ to, body, mediaUrls }) }),
+  getMessagesByPhone: (phoneNumber, limit) =>
+    request(`/messages/by-phone/${encodeURIComponent(phoneNumber)}${limit ? `?limit=${limit}` : ''}`),
   searchMessages: (query, limit) =>
     request(`/messages/search?q=${encodeURIComponent(query)}${limit ? `&limit=${limit}` : ''}`),
   markConversationRead: (id) => request(`/messages/conversations/${id}/read`, { method: 'POST' }),

@@ -156,6 +156,17 @@ export class MessagesService {
     return message;
   }
 
+  async getMessagesByPhone(phoneNumber: string, limit = 50): Promise<any> {
+    const convo = await this.conversationModel.findOne({ phoneNumber }).lean().exec();
+    if (!convo) return [];
+    return this.messageModel
+      .find({ conversation: convo._id })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean()
+      .exec();
+  }
+
   async markConversationRead(conversationId: string): Promise<any> {
     await this.conversationModel.findByIdAndUpdate(conversationId, { unreadCount: 0 });
     return { ok: true };

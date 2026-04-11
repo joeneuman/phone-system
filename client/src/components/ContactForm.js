@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { format } from 'date-fns';
 import { api } from '../services/api';
 
 const LABEL_OPTIONS = ['mobile', 'landline', 'office', 'other'];
@@ -64,6 +65,17 @@ export function ContactForm({ contact, onBack, onCall, onText }) {
   const [saving, setSaving] = useState(false);
   const [detecting, setDetecting] = useState(null); // index or 'primary'
   const [phonePicker, setPhonePicker] = useState(null); // 'call' | 'text' | null
+  const [textHistory, setTextHistory] = useState([]);
+  const [loadingTexts, setLoadingTexts] = useState(false);
+
+  useEffect(() => {
+    if (!contact.phoneNumber || isNew) return;
+    setLoadingTexts(true);
+    api.getMessagesByPhone(contact.phoneNumber, 50)
+      .then((msgs) => setTextHistory(msgs.reverse()))
+      .catch(() => {})
+      .finally(() => setLoadingTexts(false));
+  }, [contact.phoneNumber, isNew]);
 
   const update = (field, value) => setForm((f) => ({ ...f, [field]: value }));
 
@@ -335,6 +347,28 @@ export function ContactForm({ contact, onBack, onCall, onText }) {
             <button className="btn btn-danger" onClick={handleDelete}>Delete</button>
           )}
         </div>
+
+        {!isNew && textHistory.length > 0 && (
+          <div className="contact-text-history">
+            <label>Text Message History</label>
+            <div className="text-history-list">
+              {textHistory.map((msg) => (
+                <div key={msg._id} className={`text-history-msg ${msg.direction}`}>
+                  <div className="text-history-body">{msg.body}</div>
+                  {msg.mediaUrls?.map((url, i) => (
+                    <img key={i} src={url} alt="attachment" style={{ maxWidth: 120, borderRadius: 6, marginTop: 4 }} />
+                  ))}
+                  <div className="text-history-time">
+                    {msg.createdAt ? format(new Date(msg.createdAt), 'MMM d, h:mm a') : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {!isNew && loadingTexts && (
+          <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 0' }}>Loading text history...</div>
+        )}
       </div>
     </div>
   );
