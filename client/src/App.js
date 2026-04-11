@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTwilioDevice } from './hooks/useTwilioDevice';
 import { useSocket } from './hooks/useSocket';
 import { api } from './services/api';
@@ -209,6 +209,11 @@ function App() {
   }
 
   const isWideScreen = useMediaQuery('(min-width: 768px)');
+  const [panelWidth, setPanelWidth] = useState(() => {
+    const saved = localStorage.getItem('messages_panel_width');
+    return saved ? parseInt(saved) : 340;
+  });
+  const dragging = useRef(false);
   const isOnCall = phone.callStatus !== 'idle';
 
   async function handleLoginSubmit(e) {
@@ -336,12 +341,44 @@ function App() {
         {!isOnCall && view === 'messages' && (
           <div className={`messages-layout ${isWideScreen ? 'split' : 'single'}`}>
             {(isWideScreen || !selectedConvo) && (
-              <ConversationList
-                conversations={conversations}
-                onSelect={(c) => setSelectedConvo(c)}
-                onNewMessage={() => setSelectedConvo({ isNew: true })}
-                activeConvoId={selectedConvo?._id}
-              />
+              <div className="messages-list-panel" style={isWideScreen ? { width: panelWidth } : undefined}>
+                <ConversationList
+                  conversations={conversations}
+                  onSelect={(c) => setSelectedConvo(c)}
+                  onNewMessage={() => setSelectedConvo({ isNew: true })}
+                  activeConvoId={selectedConvo?._id}
+                />
+              </div>
+            )}
+            {isWideScreen && (
+              <div
+                className="resize-handle"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  dragging.current = true;
+                  document.body.style.cursor = 'col-resize';
+                  document.body.style.userSelect = 'none';
+                  let lastWidth = panelWidth;
+                  const onMouseMove = (ev) => {
+                    if (!dragging.current) return;
+                    const sidebar = 72;
+                    lastWidth = Math.min(Math.max(ev.clientX - sidebar, 200), 600);
+                    setPanelWidth(lastWidth);
+                  };
+                  const onMouseUp = () => {
+                    dragging.current = false;
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                    localStorage.setItem('messages_panel_width', String(lastWidth));
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                  };
+                  document.addEventListener('mousemove', onMouseMove);
+                  document.addEventListener('mouseup', onMouseUp);
+                }}
+              >
+                <div className="resize-handle-pill" />
+              </div>
             )}
             {selectedConvo ? (
               <MessageThread
