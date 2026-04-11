@@ -62,7 +62,7 @@ export class TwilioWebhookController {
     const twiml = new VoiceResponse();
     const from = body.From;
     const callSid = body.CallSid;
-    const callerCnam = body.CallerName || '';
+    let callerCnam = body.CallerName || '';
     const publicUrl = this.twilioService.getPublicUrl();
 
     try {
