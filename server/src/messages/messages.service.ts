@@ -52,9 +52,9 @@ export class MessagesService {
 
     const convoMap = new Map<string, any[]>();
     for (const msg of messages) {
-      const cid = msg.conversation.toString();
+      const cid = (msg as any).conversation.toString();
       if (!convoMap.has(cid)) convoMap.set(cid, []);
-      convoMap.get(cid).push({ _id: msg._id, body: msg.body, createdAt: msg.createdAt, direction: msg.direction });
+      convoMap.get(cid)!.push({ _id: msg._id, body: msg.body, createdAt: (msg as any).createdAt, direction: msg.direction });
     }
 
     const convoIds = [...convoMap.keys()];
