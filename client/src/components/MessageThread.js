@@ -133,6 +133,21 @@ export function MessageThread({ conversation, onBack, onCall, showBackButton = t
     }
   };
 
+  const handlePaste = (e) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const imageItems = items.filter((item) => item.type.startsWith('image/'));
+    if (imageItems.length === 0) return;
+    e.preventDefault();
+    const newAttachments = imageItems.map((item) => {
+      const file = item.getAsFile();
+      return {
+        file,
+        previewUrl: URL.createObjectURL(file),
+      };
+    });
+    setAttachments((prev) => [...prev, ...newAttachments]);
+  };
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -294,6 +309,7 @@ export function MessageThread({ conversation, onBack, onCall, showBackButton = t
             value={text}
             onChange={handleTextChange}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder="Type a message..."
             rows={1}
           />
