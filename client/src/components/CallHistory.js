@@ -19,7 +19,7 @@ function getCallIcon(call) {
   return { icon: '↗', className: 'outbound', label: 'Outgoing' };
 }
 
-export function CallHistory({ calls, onCall, onText }) {
+export function CallHistory({ calls, onCall, onText, onContactClick }) {
   if (!calls.length) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
@@ -47,7 +47,11 @@ export function CallHistory({ calls, onCall, onText }) {
               </div>
               <div className="list-item-content">
                 <div className="list-item-top">
-                  <span className="list-item-name">
+                  <span
+                    className="list-item-name clickable-name"
+                    onClick={() => onContactClick && onContactClick(call.contact, remoteNumber)}
+                    style={{ cursor: 'pointer' }}
+                  >
                     {call.contactName || remoteNumber}
                   </span>
                   <span className="list-item-time">

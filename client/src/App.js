@@ -443,9 +443,14 @@ function App() {
             calls={callHistory}
             onCall={handleCallFromContact}
             onText={handleTextFromContact}
-            onContactClick={async (contactId) => {
+            onContactClick={async (contactId, phoneNumber) => {
               try {
-                const contact = await api.getContact(contactId);
+                let contact;
+                if (contactId) {
+                  contact = await api.getContact(contactId);
+                } else if (phoneNumber) {
+                  contact = await api.getContactByPhone(phoneNumber);
+                }
                 if (contact) {
                   setEditingContact(contact);
                   setView('contacts');
