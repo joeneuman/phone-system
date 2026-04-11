@@ -240,18 +240,21 @@ ${transcript}`,
       ],
     });
 
-    const text = response.content[0]?.type === 'text' ? response.content[0].text : '';
+    let rawText = response.content[0]?.type === 'text' ? response.content[0].text : '';
+    // Strip markdown code fences that Haiku sometimes adds despite instructions
+    rawText = rawText.replace(/```(?:json)?\s*/gi, '').replace(/```\s*/g, '').trim();
     let summary = 'Call with Lucy';
     let firstName: string | null = null;
     let lastName: string | null = null;
 
     try {
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(rawText);
       summary = parsed.summary || summary;
       firstName = parsed.firstName || null;
       lastName = parsed.lastName || null;
+      console.log(`[${session.callSid}] Extracted: summary="${summary}", firstName="${firstName}", lastName="${lastName}"`);
     } catch {
-      console.error(`[${session.callSid}] Failed to parse summary JSON:`, text);
+      console.error(`[${session.callSid}] Failed to parse summary JSON:`, rawText);
     }
 
     const now = new Date();
