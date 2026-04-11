@@ -21,6 +21,12 @@ export class MessagesController {
     return this.messagesService.getConversations();
   }
 
+  @Get('search')
+  searchMessages(@Query('q') query: string, @Query('limit') limit?: string) {
+    if (!query || query.trim().length < 2) return [];
+    return this.messagesService.searchMessages(query.trim(), limit ? parseInt(limit) : 20);
+  }
+
   @Get('conversations/:id/messages')
   getMessages(
     @Param('id') id: string,

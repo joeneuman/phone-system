@@ -2,13 +2,17 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { format } from 'date-fns';
 import { api } from '../services/api';
 
-export function MessageThread({ conversation, onBack, onCall }) {
+export function MessageThread({ conversation, onBack, onCall, showBackButton = true, onNameSaved }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [toNumber, setToNumber] = useState(conversation.phoneNumber || '');
   const [convoId, setConvoId] = useState(conversation._id || null);
   const [attachments, setAttachments] = useState([]);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [overrideName, setOverrideName] = useState(null);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const textareaRef = useRef(null);
@@ -124,14 +128,74 @@ export function MessageThread({ conversation, onBack, onCall }) {
     }
   };
 
-  const displayName = conversation.contactName || conversation.phoneNumber || 'New Message';
+  const displayName = overrideName || conversation.contactName || conversation.phoneNumber || 'New Message';
+
+  const handleNameClick = () => {
+    if (!conversation.phoneNumber) return;
+    setEditName(displayName === conversation.phoneNumber ? '' : displayName);
+    setIsEditingName(true);
+  };
+
+  const handleNameSave = async () => {
+    const trimmed = editName.trim();
+    if (!trimmed || !conversation.phoneNumber) {
+      setIsEditingName(false);
+      return;
+    }
+    setSavingName(true);
+    try {
+      const parts = trimmed.split(/\s+/);
+      const firstName = parts[0];
+      const lastName = parts.slice(1).join(' ') || '';
+      let contact;
+      try {
+        contact = await api.getContactByPhone(conversation.phoneNumber);
+      } catch { contact = null; }
+      if (contact && contact._id) {
+        await api.updateContact(contact._id, { firstName, lastName });
+      } else {
+        await api.createContact({ phoneNumber: conversation.phoneNumber, firstName, lastName });
+      }
+      setOverrideName(trimmed);
+      if (onNameSaved) onNameSaved();
+    } catch (e) {
+      console.error('Failed to save contact name', e);
+    } finally {
+      setSavingName(false);
+      setIsEditingName(false);
+    }
+  };
+
+  const handleNameKeyDown = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); handleNameSave(); }
+    if (e.key === 'Escape') { setIsEditingName(false); }
+  };
 
   return (
     <div className="thread-container">
       <div className="view-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button className="back-btn" onClick={onBack}>←</button>
-          <h2>{displayName}</h2>
+          {showBackButton && <button className="back-btn" onClick={onBack}>←</button>}
+          {isEditingName ? (
+            <input
+              className="header-name-input"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onBlur={handleNameSave}
+              onKeyDown={handleNameKeyDown}
+              disabled={savingName}
+              autoFocus
+              placeholder="Contact name"
+            />
+          ) : (
+            <h2
+              className={conversation.phoneNumber ? 'editable' : ''}
+              onClick={handleNameClick}
+              title={conversation.phoneNumber ? 'Click to edit name' : ''}
+            >
+              {displayName}
+            </h2>
+          )}
         </div>
         {conversation.phoneNumber && (
           <button

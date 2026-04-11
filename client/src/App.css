@@ -617,6 +617,11 @@ body {
   text-overflow: ellipsis;
 }
 
+.list-item-name.clickable-name:hover {
+  color: #60a5fa;
+  text-decoration: underline;
+}
+
 .list-item-time {
   font-size: 12px;
   color: var(--text-muted);
@@ -638,6 +643,107 @@ body {
   border-radius: 50%;
   background: var(--accent);
   flex-shrink: 0;
+}
+
+/* ===== SPLIT-PANEL LAYOUT ===== */
+.messages-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.messages-layout.single {
+  flex-direction: column;
+}
+
+.messages-layout.split > *:first-child {
+  width: 340px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+}
+
+.messages-layout.split > *:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+
+.empty-thread-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 16px;
+}
+
+/* ===== MESSAGE SEARCH ===== */
+.search-bar {
+  padding: 8px 16px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-input {
+  width: 100%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 32px 8px 12px;
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+}
+.search-input:focus { border-color: var(--accent); }
+
+.search-clear {
+  position: absolute;
+  right: 24px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.search-clear:hover { color: var(--text-primary); }
+
+.search-status {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.search-match-count {
+  font-size: 12px;
+  color: var(--accent);
+  margin-top: 2px;
+}
+
+.list-item-preview mark {
+  background: rgba(96, 165, 250, 0.2);
+  color: var(--accent);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* ===== EDITABLE NAME ===== */
+.view-header h2.editable { cursor: pointer; }
+.view-header h2.editable:hover { color: var(--accent); }
+
+.header-name-input {
+  font-size: 20px;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--accent);
+  color: var(--text-primary);
+  outline: none;
+  font-family: inherit;
+  padding: 0;
+  min-width: 120px;
 }
 
 /* ===== MESSAGE THREAD ===== */

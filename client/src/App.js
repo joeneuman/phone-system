@@ -12,6 +12,7 @@ import { ContactsList } from './components/ContactsList';
 import { ContactForm } from './components/ContactForm';
 import { CallHistory } from './components/CallHistory';
 import { VoicemailList } from './components/VoicemailList';
+import { useMediaQuery } from './hooks/useMediaQuery';
 import './App.css';
 
 const PHONE_AUTH_TOKEN_KEY = 'phone_giddydigs_auth_token';
@@ -207,6 +208,7 @@ function App() {
     setView('messages');
   }
 
+  const isWideScreen = useMediaQuery('(min-width: 768px)');
   const isOnCall = phone.callStatus !== 'idle';
 
   async function handleLoginSubmit(e) {
@@ -331,20 +333,30 @@ function App() {
           <Dialpad onCall={phone.makeCall} error={phone.error} />
         )}
 
-        {!isOnCall && view === 'messages' && !selectedConvo && (
-          <ConversationList
-            conversations={conversations}
-            onSelect={(c) => setSelectedConvo(c)}
-            onNewMessage={() => setSelectedConvo({ isNew: true })}
-          />
-        )}
-
-        {!isOnCall && view === 'messages' && selectedConvo && (
-          <MessageThread
-            conversation={selectedConvo}
-            onBack={() => { setSelectedConvo(null); loadConversations(); }}
-            onCall={handleCallFromContact}
-          />
+        {!isOnCall && view === 'messages' && (
+          <div className={`messages-layout ${isWideScreen ? 'split' : 'single'}`}>
+            {(isWideScreen || !selectedConvo) && (
+              <ConversationList
+                conversations={conversations}
+                onSelect={(c) => setSelectedConvo(c)}
+                onNewMessage={() => setSelectedConvo({ isNew: true })}
+                activeConvoId={selectedConvo?._id}
+              />
+            )}
+            {selectedConvo ? (
+              <MessageThread
+                conversation={selectedConvo}
+                onBack={() => { setSelectedConvo(null); loadConversations(); }}
+                onCall={handleCallFromContact}
+                showBackButton={!isWideScreen}
+                onNameSaved={loadConversations}
+              />
+            ) : isWideScreen ? (
+              <div className="empty-thread-placeholder">
+                <p>Select a conversation</p>
+              </div>
+            ) : null}
+          </div>
         )}
 
         {!isOnCall && view === 'contacts' && !editingContact && (
@@ -372,6 +384,15 @@ function App() {
             calls={callHistory}
             onCall={handleCallFromContact}
             onText={handleTextFromContact}
+            onContactClick={async (contactId) => {
+              try {
+                const contact = await api.getContact(contactId);
+                if (contact) {
+                  setEditingContact(contact);
+                  setView('contacts');
+                }
+              } catch (e) { console.error('Failed to load contact', e); }
+            }}
           />
         )}
 

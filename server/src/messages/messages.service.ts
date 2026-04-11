@@ -40,6 +40,35 @@ export class MessagesService {
     return enriched;
   }
 
+  async searchMessages(query: string, limit = 20): Promise<any[]> {
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, 'i');
+    const messages = await this.messageModel
+      .find({ body: { $regex: regex } })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean()
+      .exec();
+
+    const convoMap = new Map<string, any[]>();
+    for (const msg of messages) {
+      const cid = msg.conversation.toString();
+      if (!convoMap.has(cid)) convoMap.set(cid, []);
+      convoMap.get(cid).push({ _id: msg._id, body: msg.body, createdAt: msg.createdAt, direction: msg.direction });
+    }
+
+    const convoIds = [...convoMap.keys()];
+    const convos = await this.conversationModel
+      .find({ _id: { $in: convoIds } })
+      .lean()
+      .exec();
+
+    return Promise.all(convos.map(async (c) => {
+      const contactName = await this.contactsService.resolveContactName(c.phoneNumber);
+      return { ...c, contactName, matchingMessages: convoMap.get(c._id.toString()) || [] };
+    }));
+  }
+
   async getMessages(conversationId: string, limit = 50, before?: string): Promise<Message[]> {
     const query: any = { conversation: new Types.ObjectId(conversationId) };
     if (before) {

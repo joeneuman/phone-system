@@ -53,6 +53,8 @@ export const api = {
     }),
   lookupNumber: (phoneNumber) =>
     request(`/contacts/lookup/${encodeURIComponent(phoneNumber)}`),
+  getContactByPhone: (phoneNumber) =>
+    request(`/contacts/phone/${encodeURIComponent(phoneNumber)}`),
 
   // Messages
   uploadMedia: async (file) => {
@@ -71,6 +73,8 @@ export const api = {
   },
   sendMessage: (to, body, mediaUrls) =>
     request('/messages/send', { method: 'POST', body: JSON.stringify({ to, body, mediaUrls }) }),
+  searchMessages: (query, limit) =>
+    request(`/messages/search?q=${encodeURIComponent(query)}${limit ? `&limit=${limit}` : ''}`),
   markConversationRead: (id) => request(`/messages/conversations/${id}/read`, { method: 'POST' }),
 
   // Calls
